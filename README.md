@@ -67,11 +67,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Both the we
 ```
 kinetic-context/
 ├── apps/
+│   ├── docs/        # Documentation site (Next.js + Fumadocs)
 │   ├── web/         # Frontend application (React + TanStack Router)
 │   └── server/      # Backend API (Hono, ORPC)
 ├── packages/
 │   ├── api/         # API layer / business logic
-│   └── db/          # Database schema & queries
+│   ├── config/      # Shared TypeScript configuration
+│   └── env/         # Environment variable validation
 ```
 
 ## OpenCode Configuration
@@ -106,6 +108,39 @@ OpenCode is used to answer questions about dependencies. Create a `config/openco
 You can configure any provider supported by OpenCode. See the [OpenCode documentation](https://opencode.ai/docs/providers) for more details.
 
 **Note:** In production (Docker), the config file should be mounted as a volume at `/config/opencode.json`.
+
+## Documentation
+
+This project includes a documentation site built with [Next.js](https://nextjs.org/) and [Fumadocs](https://fumadocs.dev). The documentation app is located in `apps/docs`.
+
+### Building Documentation Locally
+
+To build the documentation site:
+
+```bash
+# From the root directory
+pnpm build:docs
+
+# Or from the docs directory
+cd apps/docs
+pnpm build
+```
+
+The built site will be in `apps/docs/.next`. To preview the production build:
+
+```bash
+cd apps/docs
+pnpm start
+```
+
+For local development:
+
+```bash
+cd apps/docs
+pnpm dev
+```
+
+See [Deploying Documentation](#deploying-documentation) for instructions on deploying to Vercel.
 
 ## Docker
 
@@ -184,6 +219,39 @@ The following environment variables can be set:
 
 - `pnpm run dev`: Start all applications in development mode (web app and API on port 3000)
 - `pnpm run build`: Build all applications
+- `pnpm run build:docs`: Build only the documentation site
 - `pnpm run dev:web`: Start only the web application
 - `pnpm run dev:server`: Start only the server
 - `pnpm run check-types`: Check TypeScript types across all apps
+
+## Deploying Documentation
+
+The documentation site can be deployed to [Vercel](https://vercel.com) with minimal configuration.
+
+### Prerequisites
+
+- A Vercel account
+- Your repository connected to Vercel (via GitHub integration)
+
+### Configuration Steps
+
+1. **Import your repository** in the Vercel dashboard
+2. **Configure the project settings**:
+   - **Root Directory**: Set to `apps/docs`
+   - **Framework Preset**: Next.js (should auto-detect)
+   - **Build Command**: `pnpm build` (or `pnpm build:docs` from root)
+   - **Output Directory**: `.next` (default for Next.js)
+   - **Install Command**: `pnpm install`
+
+3. **Environment Variables**: No environment variables are required for the docs app
+
+4. **Deploy**: Click "Deploy" and Vercel will build and deploy your documentation site
+
+### Monorepo Notes
+
+Vercel automatically detects pnpm workspaces, so it will:
+- Install dependencies from the root `package.json`
+- Use the correct pnpm version (10.20.0 as specified in `packageManager`)
+- Build the Next.js app in the `apps/docs` directory
+
+The documentation will be available at your Vercel deployment URL (e.g., `https://your-project.vercel.app`).

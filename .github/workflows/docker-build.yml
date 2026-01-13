@@ -69,4 +69,4 @@ jobs:
 
       - name: Image digest
         if: github.event_name == 'release'
-        run: echo "Image pushed successfully with tags: ${{ steps.version.outputs.version }} and latest"
+        run: echo "Image pushed successfully with tags ${{ steps.version.outputs.version }} and latest"

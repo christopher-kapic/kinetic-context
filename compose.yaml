@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  opencode:
+    image: ghcr.io/anomalyco/opencode:latest
+    ports:
+      - "7168:4096"  # Map host port 7168 to container port 4096 (default opencode port)
+    volumes:
+      - ./config:/config
+      - ./data:/data
+    command: ["serve", "--hostname=0.0.0.0"]
+    environment:
+      - OPENCODE_CONFIG=/config/opencode.json
+    restart: unless-stopped
+
+  kinetic-context:
+    build: .
+    ports:
+      - "7167:3000"
+    volumes:
+      - ./data:/data
+      - ./config:/config
+    environment:
+      - CORS_ORIGIN=http://localhost:7167
+      - NODE_ENV=production
+      - PACKAGES_DIR=/data/packages
+      - PROJECTS_DIR=/data/projects
+      - OPENCODE_CONFIG_PATH=/config/opencode.json
+      - OPENCODE_URL=http://opencode:4096
+    depends_on:
+      - opencode

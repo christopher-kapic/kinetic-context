@@ -1,0 +1,281 @@
+---
+title: API Reference
+description: Complete API and MCP tools reference
+---
+
+# API Reference
+
+Complete reference for the kinetic-context API and MCP server tools.
+
+## MCP Server Endpoint
+
+**Base URL**: `http://localhost:7167/mcp`
+
+All MCP tools are accessible through this endpoint using the Model Context Protocol.
+
+## Tools
+
+### list_project_dependencies
+
+Lists all dependencies configured for a specific project.
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `project_identifier` | string | Yes | The identifier of the project (must match the project config filename without `.json`) |
+
+#### Returns
+
+Array of dependency objects:
+
+```typescript
+Array<{
+  identifier: string;
+  tag: string;
+}>
+```
+
+#### Example Request
+
+```json
+{
+  "tool": "list_project_dependencies",
+  "parameters": {
+    "project_identifier": "my-project"
+  }
+}
+```
+
+#### Example Response
+
+```json
+[
+  {
+    "identifier": "zod",
+    "tag": "v3.22.0"
+  },
+  {
+    "identifier": "@hookform/resolvers",
+    "tag": "master"
+  }
+]
+```
+
+---
+
+### list_dependencies
+
+Lists all available dependencies that have been configured in the system.
+
+#### Parameters
+
+None
+
+#### Returns
+
+Array of package identifiers:
+
+```typescript
+string[]
+```
+
+#### Example Request
+
+```json
+{
+  "tool": "list_dependencies",
+  "parameters": {}
+}
+```
+
+#### Example Response
+
+```json
+[
+  "zod",
+  "@hookform/resolvers",
+  "react",
+  "@tanstack/react-query"
+]
+```
+
+---
+
+### query_dependency
+
+Queries a specific dependency with a question. The system analyzes the dependency's code using OpenCode and provides an intelligent answer.
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dependency_identifier` | string | Yes | The identifier of the dependency to query |
+| `query` | string | Yes | The question to ask about the dependency |
+| `project_identifier` | string | No | If provided, uses the project-specific tag for this dependency |
+
+#### Returns
+
+String containing the answer to the query.
+
+#### Example Request
+
+```json
+{
+  "tool": "query_dependency",
+  "parameters": {
+    "dependency_identifier": "zod",
+    "query": "How do I validate an email address with zod?",
+    "project_identifier": "my-project"
+  }
+}
+```
+
+#### Example Response
+
+```json
+{
+  "result": "To validate an email address with zod, you can use the `z.string().email()` method:\n\n```typescript\nimport { z } from 'zod';\n\nconst emailSchema = z.string().email();\n\nconst result = emailSchema.parse('user@example.com');\n```\n\nThis will validate that the string is a valid email format according to RFC 5322."
+}
+```
+
+#### Behavior
+
+1. If `project_identifier` is provided:
+   - Looks up the project configuration
+   - Finds the dependency in the project's dependencies
+   - Checks out the specified tag (if different from default)
+   - Queries at that specific version
+
+2. If `project_identifier` is not provided:
+   - Uses the package's `default_tag`
+   - Queries the dependency at the default version
+
+---
+
+### query_dependencies
+
+Queries multiple dependencies together to understand how they work together.
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dependency_identifiers` | string[] | Yes | Array of dependency identifiers to query together |
+| `query` | string | Yes | The question about how these dependencies work together |
+| `project_identifier` | string | No | If provided, uses project-specific tags for all dependencies |
+
+#### Returns
+
+String containing the answer about how the dependencies work together.
+
+#### Example Request
+
+```json
+{
+  "tool": "query_dependencies",
+  "parameters": {
+    "dependency_identifiers": ["zod", "@hookform/resolvers"],
+    "query": "How do I use zod with react-hook-form for form validation?",
+    "project_identifier": "my-project"
+  }
+}
+```
+
+#### Example Response
+
+```json
+{
+  "result": "To use zod with react-hook-form, you can use @hookform/resolvers which provides a zodResolver:\n\n```typescript\nimport { useForm } from 'react-hook-form';\nimport { zodResolver } from '@hookform/resolvers/zod';\nimport { z } from 'zod';\n\nconst schema = z.object({\n  email: z.string().email(),\n  password: z.string().min(8)\n});\n\nconst { register, handleSubmit } = useForm({\n  resolver: zodResolver(schema)\n});\n```\n\nThis integrates zod validation with react-hook-form's form handling."
+}
+```
+
+#### Notes
+
+- AI agents should prefer using `query_dependency` multiple times for better results
+- This tool is useful when you need to understand interactions between dependencies
+- All dependencies must be configured before querying
+
+---
+
+## HTTP API
+
+The web application also exposes HTTP endpoints for programmatic access.
+
+### Health Check
+
+**GET** `/health`
+
+Returns the health status of the server.
+
+#### Response
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### Web UI
+
+**GET** `/`
+
+Serves the web application interface.
+
+### MCP Endpoint
+
+**POST** `/mcp`
+
+MCP protocol endpoint. Accepts MCP protocol messages and returns responses.
+
+---
+
+## Error Responses
+
+All endpoints may return error responses in the following format:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error message",
+    "details": {}
+  }
+}
+```
+
+### Common Error Codes
+
+- `DEPENDENCY_NOT_FOUND` - The specified dependency identifier doesn't exist
+- `PROJECT_NOT_FOUND` - The specified project identifier doesn't exist
+- `INVALID_QUERY` - The query parameter is missing or invalid
+- `OPENCODE_ERROR` - Error communicating with OpenCode service
+- `GIT_ERROR` - Error cloning or checking out repository
+
+---
+
+## Rate Limiting
+
+Currently, there are no rate limits enforced. However, be mindful of:
+
+- OpenCode API rate limits (depends on your provider)
+- Git operations (cloning large repositories)
+- System resources (memory, CPU)
+
+---
+
+## Authentication
+
+Currently, the MCP server and API do not require authentication as they are designed to run locally. For production deployments, consider:
+
+- Adding authentication middleware
+- Using reverse proxy with authentication
+- Network-level security (firewall rules)
+
+---
+
+## Versioning
+
+The API follows semantic versioning. Breaking changes will be indicated by version increments in the Docker image tags.
+
+Current version: See DockerHub tags for available versions.

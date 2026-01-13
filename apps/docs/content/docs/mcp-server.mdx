@@ -1,0 +1,188 @@
+---
+title: MCP Server
+description: Model Context Protocol server documentation
+---
+
+# MCP Server
+
+kinetic-context exposes a Model Context Protocol (MCP) server that AI coding tools can connect to for querying dependency information.
+
+## What is MCP?
+
+The Model Context Protocol (MCP) is a protocol that enables AI assistants to securely access external data sources and tools. kinetic-context implements an MCP server that provides information about open-source dependencies.
+
+## Server Endpoint
+
+The MCP server is exposed at:
+
+**`http://localhost:7167/mcp`**
+
+(Or whatever port you've configured in your Docker Compose setup)
+
+## Available Tools
+
+The MCP server provides the following tools:
+
+### list_project_dependencies
+
+Lists all dependencies configured for a specific project.
+
+**Parameters:**
+- `project_identifier` (required): The identifier of the project (must match a project config file name)
+
+**Returns:** Array of dependency objects with their identifiers and tags
+
+**Example:**
+```json
+{
+  "project_identifier": "my-project"
+}
+```
+
+### list_dependencies
+
+Lists all available dependencies that have been configured in the system.
+
+**Parameters:** None
+
+**Returns:** Array of all package identifiers
+
+**Use case:** AI agents can use this to inform users if they want to ask about a dependency that isn't configured for their project.
+
+### query_dependency
+
+Queries a specific dependency with a question. The system will use OpenCode to analyze the dependency's code and provide an answer.
+
+**Parameters:**
+- `dependency_identifier` (required): The identifier of the dependency to query
+- `query` (required): The question to ask about the dependency
+- `project_identifier` (optional): If provided, the system will checkout the specific tag configured for this project before querying
+
+**Returns:** Answer to the query based on analysis of the dependency's code
+
+**Example:**
+```json
+{
+  "dependency_identifier": "zod",
+  "query": "How do I validate an email address?",
+  "project_identifier": "my-project"
+}
+```
+
+### query_dependencies
+
+Queries multiple dependencies together to understand how they work together.
+
+**Parameters:**
+- `dependency_identifiers` (required): Array of dependency identifiers
+- `query` (required): The question about how these dependencies work together
+- `project_identifier` (optional): If provided, uses project-specific tags
+
+**Returns:** Answer about how the dependencies work together
+
+**Note:** AI agents should prefer using `query_dependency` multiple times, but this tool exists for cases where there are problems with multiple sequential calls.
+
+**Example:**
+```json
+{
+  "dependency_identifiers": ["zod", "@hookform/resolvers"],
+  "query": "How do I use zod with react-hook-form?",
+  "project_identifier": "my-project"
+}
+```
+
+## Connecting AI Tools
+
+### Claude Desktop
+
+To connect Claude Desktop to kinetic-context:
+
+1. Open Claude Desktop settings
+2. Add a new MCP server
+3. Configure:
+   - **Name**: kinetic-context
+   - **URL**: `http://localhost:7167/mcp`
+   - **Type**: HTTP
+
+### Cursor
+
+To connect Cursor to kinetic-context:
+
+1. Open Cursor settings
+2. Navigate to MCP servers
+3. Add configuration:
+   ```json
+   {
+     "name": "kinetic-context",
+     "url": "http://localhost:7167/mcp"
+   }
+   ```
+
+### Custom Integration
+
+You can integrate with any MCP-compatible client by pointing it to:
+
+```
+http://localhost:7167/mcp
+```
+
+## Project Identifier Matching
+
+When using `query_dependency` or `query_dependencies` with a `project_identifier`, the system will:
+
+1. Look up the project configuration
+2. Find the dependency in the project's dependencies list
+3. Checkout the specified tag (if different from default)
+4. Query the dependency at that specific version
+
+This allows you to:
+- Use different versions of the same dependency in different projects
+- Pin specific versions for production
+- Test with beta versions in experimental projects
+
+## How It Works
+
+1. **Package Cloning**: When a dependency is first queried, kinetic-context clones the repository to `/data/packages/{identifier}/`
+
+2. **Version Checkout**: If a project identifier is provided and specifies a tag, the system checks out that specific tag
+
+3. **Code Analysis**: OpenCode analyzes the dependency's codebase to understand its structure and usage
+
+4. **Query Processing**: Your question is sent to OpenCode along with the relevant code context
+
+5. **Response**: OpenCode provides an intelligent answer based on the actual code
+
+## Best Practices
+
+1. **Use project identifiers** - Always specify `project_identifier` when querying to ensure you get answers for the correct version
+
+2. **Be specific in queries** - More specific questions yield better answers (e.g., "How do I validate a form with zod?" vs. "How does zod work?")
+
+3. **Check available dependencies** - Use `list_dependencies` first to see what's available
+
+4. **Configure packages first** - Make sure packages are configured before querying them
+
+## Troubleshooting
+
+### Connection Refused
+
+Make sure kinetic-context is running:
+```bash
+kctx status
+```
+
+### Dependency Not Found
+
+1. Verify the dependency is configured in `/data/packages/{identifier}.json`
+2. Check that the repository can be cloned
+3. Ensure the identifier matches exactly
+
+### Wrong Version
+
+1. Check the project configuration for the dependency tag
+2. Verify the tag exists in the repository
+3. Try querying without `project_identifier` to use the default tag
+
+### OpenCode Errors
+
+Check the OpenCode configuration and API key in `~/.kctx/config/opencode.json`

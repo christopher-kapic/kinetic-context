@@ -1,0 +1,154 @@
+---
+title: Getting Started
+description: Quick start guide for kinetic-context
+---
+
+# Getting Started
+
+This guide will help you get kinetic-context up and running in just a few minutes.
+
+## Prerequisites
+
+- Docker and Docker Compose installed
+- A GitHub account (for authenticating to ghcr.io)
+- A GitHub Personal Access Token with `read:packages` permission
+
+## Installation
+
+### Step 1: Run the Installation Script
+
+The easiest way to install kinetic-context is using our installation script:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/christopher-kapic/kinetic-context/main/setup.sh)
+```
+
+This script will:
+- Create the `~/.kctx` directory structure
+- Generate a `compose.yaml` file
+- Create the `kctx` executable script
+- Set up example configuration files
+
+### Step 2: Authenticate to GitHub Container Registry
+
+Before starting kinetic-context, you need to authenticate to GitHub Container Registry to pull the opencode image:
+
+```bash
+docker login ghcr.io
+```
+
+When prompted:
+- **Username**: Your GitHub username
+- **Password**: A GitHub Personal Access Token (PAT) with `read:packages` permission
+
+To create a PAT:
+1. Go to [GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)
+2. Click "Generate new token (classic)"
+3. Give it a name (e.g., "kinetic-context")
+4. Select the `read:packages` scope
+5. Click "Generate token"
+6. Copy the token and use it as the password when running `docker login ghcr.io`
+
+### Step 3: Configure OpenCode
+
+Edit the OpenCode configuration file:
+
+```bash
+# Open the config file in your editor
+nano ~/.kctx/config/opencode.json
+# or
+code ~/.kctx/config/opencode.json
+```
+
+Update the API key for your chosen provider. For example, with OpenRouter:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "openrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenRouter",
+      "options": {
+        "baseURL": "https://openrouter.ai/api/v1",
+        "apiKey": "your-actual-api-key-here"
+      },
+      "models": {
+        "openrouter/anthropic/claude-3.5-sonnet": {
+          "name": "Claude 3.5 Sonnet"
+        }
+      }
+    }
+  },
+  "model": "openrouter/anthropic/claude-3.5-sonnet"
+}
+```
+
+See the [Configuration](/docs/configuration) guide for more provider options.
+
+### Step 4: Add kctx to Your PATH
+
+Add the `kctx` command to your PATH so you can use it from anywhere:
+
+**For bash** (add to `~/.bashrc` or `~/.bash_profile`):
+```bash
+export PATH="$HOME/.kctx/bin:$PATH"
+```
+
+**For zsh** (add to `~/.zshrc`):
+```bash
+export PATH="$HOME/.kctx/bin:$PATH"
+```
+
+Then reload your shell:
+```bash
+source ~/.bashrc  # or source ~/.zshrc
+```
+
+### Step 5: Start kinetic-context
+
+Start the services:
+
+```bash
+kctx start
+```
+
+Or simply:
+```bash
+kctx
+```
+
+### Step 6: Access the Web UI
+
+Open your browser and navigate to:
+
+**http://localhost:7167**
+
+You should see the kinetic-context web interface!
+
+## Next Steps
+
+- [Configure Packages](/docs/configuration#package-configuration) - Add dependencies to query
+- [Create Projects](/docs/configuration#project-configuration) - Set up projects with dependencies
+- [Use the MCP Server](/docs/mcp-server) - Connect your AI coding tools
+- [Learn about Docker Setup](/docs/docker) - Advanced Docker configuration
+
+## Troubleshooting
+
+### Can't pull opencode image
+
+Make sure you've authenticated to ghcr.io:
+```bash
+docker login ghcr.io
+```
+
+### Services won't start
+
+Check the logs:
+```bash
+kctx logs
+```
+
+### Port already in use
+
+Edit `~/.kctx/compose.yaml` and change the port mappings if 7167 or 7168 are already in use.

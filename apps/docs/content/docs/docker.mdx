@@ -1,0 +1,275 @@
+---
+title: Docker Guide
+description: Docker usage and configuration guide
+---
+
+# Docker Guide
+
+kinetic-context is designed to run in Docker containers for easy deployment and isolation.
+
+## Quick Start with Docker
+
+The easiest way to run kinetic-context is using the [installation script](/docs/installation#automated-installation-recommended), which sets up Docker Compose automatically.
+
+## Docker Compose Setup
+
+The standard setup uses Docker Compose with two services:
+
+1. **opencode** - The AI code analysis service
+2. **kinetic-context** - The main application server
+
+### Standard Compose File
+
+```yaml
+version: '3.8'
+
+services:
+  opencode:
+    image: ghcr.io/anomalyco/opencode:latest
+    ports:
+      - "7168:4096"
+    volumes:
+      - ~/.kctx/config:/config
+      - ~/.kctx/data:/data
+    command: ["serve", "--hostname=0.0.0.0"]
+    environment:
+      - OPENCODE_CONFIG=/config/opencode.json
+    restart: unless-stopped
+
+  kinetic-context:
+    image: christopherkapic/kinetic-context:latest
+    ports:
+      - "7167:3000"
+    volumes:
+      - ~/.kctx/data:/data
+      - ~/.kctx/config:/config
+    environment:
+      - CORS_ORIGIN=http://localhost:7167
+      - NODE_ENV=production
+      - PACKAGES_DIR=/data/packages
+      - PROJECTS_DIR=/data/projects
+      - OPENCODE_CONFIG_PATH=/config/opencode.json
+      - OPENCODE_URL=http://opencode:4096
+    depends_on:
+      - opencode
+    restart: unless-stopped
+```
+
+## GitHub Container Registry Authentication
+
+**Important**: The opencode image is hosted on GitHub Container Registry (ghcr.io) and requires authentication.
+
+### Authenticating to ghcr.io
+
+Before pulling the opencode image, you must authenticate:
+
+```bash
+docker login ghcr.io
+```
+
+When prompted:
+- **Username**: Your GitHub username
+- **Password**: A GitHub Personal Access Token (PAT) with `read:packages` permission
+
+### Creating a GitHub Personal Access Token
+
+1. Go to [GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)
+2. Click "Generate new token (classic)"
+3. Give it a descriptive name (e.g., "kinetic-context-docker")
+4. Select the `read:packages` scope
+5. Click "Generate token"
+6. **Copy the token immediately** (you won't be able to see it again)
+7. Use this token as the password when running `docker login ghcr.io`
+
+### Token Persistence
+
+The authentication is stored in `~/.docker/config.json`. The token will persist until you log out or it expires.
+
+To log out:
+```bash
+docker logout ghcr.io
+```
+
+## Volume Mounts
+
+kinetic-context requires two volume mounts:
+
+### Data Volume (`/data`)
+
+Contains package repositories and project configurations:
+
+```
+/data
+├── packages/
+│   ├── package-name/          # Cloned git repository
+│   └── package-name.json      # Package configuration
+└── projects/
+    └── project-name.json      # Project configuration
+```
+
+### Config Volume (`/config`)
+
+Contains the OpenCode configuration:
+
+```
+/config
+└── opencode.json              # OpenCode AI configuration
+```
+
+## Port Mappings
+
+Default port mappings:
+
+- **7167** → kinetic-context web UI and API (container port 3000)
+- **7168** → OpenCode service (container port 4096)
+
+You can change these in your `compose.yaml` if needed:
+
+```yaml
+services:
+  kinetic-context:
+    ports:
+      - "8080:3000"  # Use port 8080 instead of 7167
+```
+
+## Running with Docker Run
+
+If you prefer `docker run` instead of Docker Compose:
+
+```bash
+# Start opencode
+docker run -d \
+  --name opencode \
+  -p 7168:4096 \
+  -v ~/.kctx/config:/config \
+  -v ~/.kctx/data:/data \
+  -e OPENCODE_CONFIG=/config/opencode.json \
+  ghcr.io/anomalyco/opencode:latest \
+  serve --hostname=0.0.0.0
+
+# Start kinetic-context
+docker run -d \
+  --name kinetic-context \
+  -p 7167:3000 \
+  -v ~/.kctx/data:/data \
+  -v ~/.kctx/config:/config \
+  -e CORS_ORIGIN=http://localhost:7167 \
+  -e NODE_ENV=production \
+  -e PACKAGES_DIR=/data/packages \
+  -e PROJECTS_DIR=/data/projects \
+  -e OPENCODE_CONFIG_PATH=/config/opencode.json \
+  -e OPENCODE_URL=http://localhost:7168 \
+  --link opencode:opencode \
+  christopherkapic/kinetic-context:latest
+```
+
+## Building from Source
+
+To build the Docker image from source:
+
+```bash
+# Clone the repository
+git clone https://github.com/christopher-kapic/kinetic-context.git
+cd kinetic-context
+
+# Build the image
+docker build -t christopherkapic/kinetic-context:latest .
+
+# Or use docker compose
+docker compose build
+```
+
+## Image Tags
+
+Available image tags on DockerHub:
+
+- `christopherkapic/kinetic-context:latest` - Latest stable release
+- `christopherkapic/kinetic-context:0.1.0` - Specific version tag
+
+## Updating Images
+
+To update to the latest version:
+
+```bash
+# Pull latest images
+docker pull christopherkapic/kinetic-context:latest
+docker pull ghcr.io/anomalyco/opencode:latest
+
+# Restart services
+docker compose -f ~/.kctx/compose.yaml restart
+```
+
+Or using the kctx command:
+
+```bash
+kctx restart
+```
+
+## Troubleshooting
+
+### Image Pull Errors
+
+If you get authentication errors when pulling the opencode image:
+
+```bash
+# Verify you're logged in
+docker login ghcr.io
+
+# Check your token has read:packages permission
+```
+
+### Port Conflicts
+
+If ports 7167 or 7168 are already in use:
+
+1. Edit `~/.kctx/compose.yaml`
+2. Change the port mappings
+3. Restart the services
+
+### Volume Permission Issues
+
+If you encounter permission issues with volumes:
+
+```bash
+# On Linux, you may need to adjust permissions
+sudo chown -R $USER:$USER ~/.kctx
+```
+
+### Container Won't Start
+
+Check the logs:
+
+```bash
+# Using kctx
+kctx logs
+
+# Or directly
+docker compose -f ~/.kctx/compose.yaml logs
+```
+
+## Production Considerations
+
+For production deployments:
+
+1. **Use specific version tags** instead of `latest`
+2. **Set up proper backups** for your data volume
+3. **Configure resource limits** in compose.yaml
+4. **Use secrets management** for API keys
+5. **Set up monitoring** and logging
+6. **Configure reverse proxy** (nginx, traefik, etc.) for HTTPS
+
+Example with resource limits:
+
+```yaml
+services:
+  kinetic-context:
+    image: christopherkapic/kinetic-context:0.1.0
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+```

@@ -1,0 +1,3 @@
+{
+  "extends": "@kinetic-context/config/tsconfig.base.json"
+}

@@ -1,0 +1,207 @@
+---
+title: Installation
+description: Detailed installation instructions for kinetic-context
+---
+
+# Installation
+
+There are two ways to install kinetic-context: using the automated setup script (recommended) or manual installation.
+
+## Automated Installation (Recommended)
+
+The easiest way to install kinetic-context is using our installation script.
+
+### Quick Install
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/christopher-kapic/kinetic-context/main/setup.sh)
+```
+
+This script will:
+- Create the `~/.kctx` directory structure
+- Generate a Docker Compose configuration file
+- Create the `kctx` command-line tool
+- Set up example configuration files
+
+### What Gets Installed
+
+The installation script creates the following structure:
+
+```
+~/.kctx/
+├── bin/
+│   └── kctx              # Command-line tool
+├── config/
+│   └── opencode.json    # OpenCode configuration
+├── data/
+│   ├── packages/        # Package repositories and configs
+│   └── projects/        # Project configurations
+└── compose.yaml          # Docker Compose configuration
+```
+
+### Post-Installation Steps
+
+After running the script, you need to:
+
+1. **Authenticate to GitHub Container Registry** (required):
+   ```bash
+   docker login ghcr.io
+   ```
+   You'll need a GitHub Personal Access Token with `read:packages` permission. See [Getting Started](/docs/getting-started#step-2-authenticate-to-github-container-registry) for details.
+
+2. **Configure OpenCode** - Edit `~/.kctx/config/opencode.json` with your API key
+
+3. **Add kctx to PATH** - Add `~/.kctx/bin` to your PATH environment variable
+
+4. **Start the services**:
+   ```bash
+   kctx start
+   ```
+
+## Manual Installation
+
+If you prefer to set up everything manually:
+
+### Step 1: Create Directory Structure
+
+```bash
+mkdir -p ~/.kctx/{bin,config,data/{packages,projects}}
+```
+
+### Step 2: Create Docker Compose File
+
+Create `~/.kctx/compose.yaml`:
+
+```yaml
+version: '3.8'
+
+services:
+  opencode:
+    image: ghcr.io/anomalyco/opencode:latest
+    ports:
+      - "7168:4096"
+    volumes:
+      - ~/.kctx/config:/config
+      - ~/.kctx/data:/data
+    command: ["serve", "--hostname=0.0.0.0"]
+    environment:
+      - OPENCODE_CONFIG=/config/opencode.json
+    restart: unless-stopped
+
+  kinetic-context:
+    image: christopherkapic/kinetic-context:latest
+    ports:
+      - "7167:3000"
+    volumes:
+      - ~/.kctx/data:/data
+      - ~/.kctx/config:/config
+    environment:
+      - CORS_ORIGIN=http://localhost:7167
+      - NODE_ENV=production
+      - PACKAGES_DIR=/data/packages
+      - PROJECTS_DIR=/data/projects
+      - OPENCODE_CONFIG_PATH=/config/opencode.json
+      - OPENCODE_URL=http://opencode:4096
+    depends_on:
+      - opencode
+    restart: unless-stopped
+```
+
+### Step 3: Create OpenCode Configuration
+
+Create `~/.kctx/config/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "openrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenRouter",
+      "options": {
+        "baseURL": "https://openrouter.ai/api/v1",
+        "apiKey": "your-api-key-here"
+      },
+      "models": {
+        "openrouter/anthropic/claude-3.5-sonnet": {
+          "name": "Claude 3.5 Sonnet"
+        }
+      }
+    }
+  },
+  "model": "openrouter/anthropic/claude-3.5-sonnet"
+}
+```
+
+### Step 4: Create kctx Command
+
+Create `~/.kctx/bin/kctx`:
+
+```bash
+#!/bin/bash
+docker compose -f ~/.kctx/compose.yaml "$@"
+```
+
+Make it executable:
+```bash
+chmod +x ~/.kctx/bin/kctx
+```
+
+### Step 5: Authenticate to GitHub Container Registry
+
+```bash
+docker login ghcr.io
+```
+
+### Step 6: Start Services
+
+```bash
+kctx up -d
+```
+
+## Docker Image Tags
+
+The kinetic-context Docker image is available on DockerHub:
+
+- `christopherkapic/kinetic-context:latest` - Latest stable release
+- `christopherkapic/kinetic-context:0.1.0` - Specific version (example)
+
+## System Requirements
+
+- **Docker**: Version 20.10 or later
+- **Docker Compose**: Version 2.0 or later
+- **Disk Space**: At least 2GB free (for Docker images and package repositories)
+- **Memory**: 2GB RAM minimum (4GB recommended)
+
+## Platform Support
+
+kinetic-context runs on:
+- Linux (x86_64, ARM64)
+- macOS (Intel, Apple Silicon)
+- Windows (via WSL2 or Docker Desktop)
+
+## Updating
+
+To update to the latest version:
+
+```bash
+# Pull the latest image
+docker pull christopherkapic/kinetic-context:latest
+
+# Restart the services
+kctx restart
+```
+
+## Uninstallation
+
+To remove kinetic-context:
+
+```bash
+# Stop and remove containers
+kctx down
+
+# Remove the directory (optional)
+rm -rf ~/.kctx
+```
+
+Note: This will delete all your configuration and data. Make sure to back up anything important first.

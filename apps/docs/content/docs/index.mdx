@@ -1,0 +1,65 @@
+---
+title: Welcome to kinetic-context
+description: An MCP server for getting information about open-source dependencies
+---
+
+# kinetic-context
+
+**kinetic-context** is an MCP (Model Context Protocol) server that helps developers get information about open-source dependencies. It provides a Docker image that you can run locally, exposing an MCP server that AI coding tools can connect to for querying dependency information.
+
+## What is kinetic-context?
+
+kinetic-context allows you to:
+
+- **Query dependencies** - Ask questions about how to use open-source packages
+- **Manage projects** - Organize dependencies for different projects
+- **Version control** - Use specific versions/tags of dependencies per project
+- **AI-powered answers** - Uses OpenCode AI to provide intelligent answers about dependencies
+
+The server clones repository code for dependencies and uses [OpenCode](https://github.com/opencode-dev/opencode) (an AI code editor) to answer questions about how to use dependencies.
+
+## Quick Start
+
+Get started with kinetic-context in minutes:
+
+```bash
+# Run the installation script
+bash <(curl -fsSL https://raw.githubusercontent.com/christopher-kapic/kinetic-context/main/setup.sh)
+
+# Authenticate to GitHub Container Registry (required for opencode image)
+docker login ghcr.io
+
+# Start kinetic-context
+kctx start
+```
+
+Then access the web UI at [http://localhost:7167](http://localhost:7167)
+
+<Cards>
+  <Card title="Getting Started" href="/docs/getting-started" description="Learn how to set up and use kinetic-context" />
+  <Card title="Installation" href="/docs/installation" description="Detailed installation instructions" />
+  <Card title="Configuration" href="/docs/configuration" description="Configure opencode, packages, and projects" />
+  <Card title="MCP Server" href="/docs/mcp-server" description="Learn about the MCP server tools" />
+</Cards>
+
+## Features
+
+- **MCP Server** - Model Context Protocol server for dependency queries
+- **Web Interface** - Browser-based UI for managing projects and dependencies
+- **Docker Support** - Easy deployment with Docker
+- **Version Management** - Pin specific versions of dependencies per project
+- **AI Integration** - Powered by OpenCode for intelligent code analysis
+
+## How It Works
+
+1. **Configure Packages** - Add package configurations to define which dependencies are available
+2. **Create Projects** - Set up projects and associate them with specific dependencies
+3. **Query Dependencies** - Use the MCP server or web UI to ask questions about dependencies
+4. **Get Answers** - OpenCode analyzes the dependency code and provides intelligent answers
+
+## Architecture
+
+- **Server** - Hono-based API server with MCP endpoint
+- **Web Frontend** - React application with TanStack Router
+- **OpenCode Integration** - AI-powered code analysis
+- **Docker** - Containerized deployment for easy setup

@@ -8,11 +8,10 @@ import {
   readPackageConfig,
   writePackageConfig,
   deletePackageConfig,
-  readGlobalConfig,
   type PackageConfig,
 } from "../../../../apps/server/src/utils/config";
 import { ensureRepoCloned, ensureRepoAvailable, checkoutTag, getRepoIdentifierFromUrl } from "../../../../apps/server/src/utils/git";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
 import { queryOpencodeStream, type OpencodeModel } from "../../../../apps/server/src/utils/opencode";
 import { readOpencodeConfig } from "../../../../apps/server/src/utils/config";
 
@@ -154,12 +153,6 @@ export const packagesRouter = {
         });
       }
 
-      // Get global config for default packages directory
-      // PACKAGES_DIR is typically /data/packages, so parent is /data
-      const dataDir = dirname(env.PACKAGES_DIR) || "/data";
-      const globalConfig = await readGlobalConfig(dataDir);
-      const defaultPackagesDir = globalConfig.default_packages_dir;
-
       // Determine repo_path based on storage_type
       let repoPath: string;
       if (input.storage_type === "cloned") {
@@ -172,7 +165,8 @@ export const packagesRouter = {
           });
         }
         const repoIdentifier = getRepoIdentifierFromUrl(input.urls.git);
-        repoPath = join(defaultPackagesDir, repoIdentifier);
+        // Use env.PACKAGES_DIR directly to match where ensureRepoCloned actually clones
+        repoPath = join(env.PACKAGES_DIR, repoIdentifier);
       } else {
         // For existing repos, use the provided path
         repoPath = input.repo_path;

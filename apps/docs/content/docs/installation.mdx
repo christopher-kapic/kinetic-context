@@ -5,62 +5,11 @@ description: Detailed installation instructions for kinetic-context
 
 # Installation
 
-There are two ways to install kinetic-context: using the automated setup script (recommended) or manual installation.
+There are two ways to install kinetic-context: manual installation (recommended) or using the automated setup script.
 
-## Automated Installation (Recommended)
+## Manual Installation (Recommended)
 
-The easiest way to install kinetic-context is using our installation script.
-
-### Quick Install
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/christopher-kapic/kinetic-context/main/setup.sh)
-```
-
-This script will:
-- Create the `~/.kctx` directory structure
-- Generate a Docker Compose configuration file
-- Create the `kctx` command-line tool
-- Set up example configuration files
-
-### What Gets Installed
-
-The installation script creates the following structure:
-
-```
-~/.kctx/
-├── bin/
-│   └── kctx              # Command-line tool
-├── config/
-│   └── opencode.json    # OpenCode configuration
-├── data/
-│   ├── packages/        # Package repositories and configs
-│   └── projects/        # Project configurations
-└── compose.yaml          # Docker Compose configuration
-```
-
-### Post-Installation Steps
-
-After running the script, you need to:
-
-1. **Authenticate to GitHub Container Registry** (required):
-   ```bash
-   docker login ghcr.io
-   ```
-   You'll need a GitHub Personal Access Token with `read:packages` permission. See [Getting Started](/docs/getting-started#step-2-authenticate-to-github-container-registry) for details.
-
-2. **Configure OpenCode** - Edit `~/.kctx/config/opencode.json` with your API key
-
-3. **Add kctx to PATH** - Add `~/.kctx/bin` to your PATH environment variable
-
-4. **Start the services**:
-   ```bash
-   kctx start
-   ```
-
-## Manual Installation
-
-If you prefer to set up everything manually:
+Manual installation is the recommended approach as it gives you full visibility and control over what's being set up, and follows security best practices by avoiding running scripts from the internet.
 
 ### Step 1: Create Directory Structure
 
@@ -158,6 +107,57 @@ docker login ghcr.io
 ```bash
 kctx up -d
 ```
+
+## Automated Installation (Alternative)
+
+If you prefer to use an automated setup script, you can use the installation script:
+
+### Quick Install
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/christopher-kapic/kinetic-context/master/setup.sh)
+```
+
+This script will:
+- Create the `~/.kctx` directory structure
+- Generate a Docker Compose configuration file
+- Create the `kctx` command-line tool
+- Set up example configuration files
+
+### What Gets Installed
+
+The installation script creates the following structure:
+
+```
+~/.kctx/
+├── bin/
+│   └── kctx              # Command-line tool
+├── config/
+│   └── opencode.json    # OpenCode configuration
+├── data/
+│   ├── packages/        # Package repositories and configs
+│   └── projects/        # Project configurations
+└── compose.yaml          # Docker Compose configuration
+```
+
+### Post-Installation Steps
+
+After running the script, you need to:
+
+1. **Authenticate to GitHub Container Registry** (required):
+   ```bash
+   docker login ghcr.io
+   ```
+   You'll need a GitHub Personal Access Token with `read:packages` permission. See [Getting Started](/docs/getting-started#step-2-authenticate-to-github-container-registry) for details.
+
+2. **Configure OpenCode** - Edit `~/.kctx/config/opencode.json` with your API key
+
+3. **Add kctx to PATH** - Add `~/.kctx/bin` to your PATH environment variable
+
+4. **Start the services**:
+   ```bash
+   kctx start
+   ```
 
 ## Docker Image Tags
 

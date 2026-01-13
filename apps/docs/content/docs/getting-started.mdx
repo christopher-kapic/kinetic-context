@@ -15,52 +15,56 @@ This guide will help you get kinetic-context up and running in just a few minute
 
 ## Installation
 
-### Step 1: Run the Installation Script
+### Step 1: Create Directory Structure
 
-The easiest way to install kinetic-context is using our installation script:
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/christopher-kapic/kinetic-context/main/setup.sh)
-```
-
-This script will:
-- Create the `~/.kctx` directory structure
-- Generate a `compose.yaml` file
-- Create the `kctx` executable script
-- Set up example configuration files
-
-### Step 2: Authenticate to GitHub Container Registry
-
-Before starting kinetic-context, you need to authenticate to GitHub Container Registry to pull the opencode image:
+Create the necessary directories:
 
 ```bash
-docker login ghcr.io
+mkdir -p ~/.kctx/{bin,config,data/{packages,projects}}
 ```
 
-When prompted:
-- **Username**: Your GitHub username
-- **Password**: A GitHub Personal Access Token (PAT) with `read:packages` permission
+### Step 2: Create Docker Compose File
 
-To create a PAT:
-1. Go to [GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)
-2. Click "Generate new token (classic)"
-3. Give it a name (e.g., "kinetic-context")
-4. Select the `read:packages` scope
-5. Click "Generate token"
-6. Copy the token and use it as the password when running `docker login ghcr.io`
+Create `~/.kctx/compose.yaml`:
 
-### Step 3: Configure OpenCode
+```yaml
+version: '3.8'
 
-Edit the OpenCode configuration file:
+services:
+  opencode:
+    image: ghcr.io/anomalyco/opencode:latest
+    ports:
+      - "7168:4096"
+    volumes:
+      - ~/.kctx/config:/config
+      - ~/.kctx/data:/data
+    command: ["serve", "--hostname=0.0.0.0"]
+    environment:
+      - OPENCODE_CONFIG=/config/opencode.json
+    restart: unless-stopped
 
-```bash
-# Open the config file in your editor
-nano ~/.kctx/config/opencode.json
-# or
-code ~/.kctx/config/opencode.json
+  kinetic-context:
+    image: christopherkapic/kinetic-context:latest
+    ports:
+      - "7167:3000"
+    volumes:
+      - ~/.kctx/data:/data
+      - ~/.kctx/config:/config
+    environment:
+      - CORS_ORIGIN=http://localhost:7167
+      - NODE_ENV=production
+      - PACKAGES_DIR=/data/packages
+      - PROJECTS_DIR=/data/projects
+      - OPENCODE_CONFIG_PATH=/config/opencode.json
+      - OPENCODE_URL=http://opencode:4096
+    depends_on:
+      - opencode
+    restart: unless-stopped
 ```
 
-Update the API key for your chosen provider. For example, with OpenRouter:
+### Step 3: Create OpenCode Configuration
+
+Create `~/.kctx/config/opencode.json` with your chosen provider. For example, with OpenRouter:
 
 ```json
 {
@@ -86,7 +90,41 @@ Update the API key for your chosen provider. For example, with OpenRouter:
 
 See the [Configuration](/docs/configuration) guide for more provider options.
 
-### Step 4: Add kctx to Your PATH
+### Step 4: Create kctx Command
+
+Create `~/.kctx/bin/kctx`:
+
+```bash
+#!/bin/bash
+docker compose -f ~/.kctx/compose.yaml "$@"
+```
+
+Make it executable:
+```bash
+chmod +x ~/.kctx/bin/kctx
+```
+
+### Step 5: Authenticate to GitHub Container Registry
+
+Before starting kinetic-context, you need to authenticate to GitHub Container Registry to pull the opencode image:
+
+```bash
+docker login ghcr.io
+```
+
+When prompted:
+- **Username**: Your GitHub username
+- **Password**: A GitHub Personal Access Token (PAT) with `read:packages` permission
+
+To create a PAT:
+1. Go to [GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)
+2. Click "Generate new token (classic)"
+3. Give it a name (e.g., "kinetic-context")
+4. Select the `read:packages` scope
+5. Click "Generate token"
+6. Copy the token and use it as the password when running `docker login ghcr.io`
+
+### Step 6: Add kctx to Your PATH
 
 Add the `kctx` command to your PATH so you can use it from anywhere:
 
@@ -105,7 +143,7 @@ Then reload your shell:
 source ~/.bashrc  # or source ~/.zshrc
 ```
 
-### Step 5: Start kinetic-context
+### Step 7: Start kinetic-context
 
 Start the services:
 
@@ -118,13 +156,31 @@ Or simply:
 kctx
 ```
 
-### Step 6: Access the Web UI
+### Step 8: Access the Web UI
 
 Open your browser and navigate to:
 
 **http://localhost:7167**
 
 You should see the kinetic-context web interface!
+
+## Alternative: Automated Installation
+
+If you prefer to use an automated setup script instead of manual installation:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/christopher-kapic/kinetic-context/master/setup.sh)
+```
+
+This script will:
+- Create the `~/.kctx` directory structure
+- Generate a `compose.yaml` file
+- Create the `kctx` executable script
+- Set up example configuration files
+
+After running the script, follow steps 5-8 above (authenticate, add to PATH, start services, and access the web UI).
+
+**Note:** Manual installation is recommended for security best practices, as it gives you full visibility into what's being set up.
 
 ## Next Steps
 

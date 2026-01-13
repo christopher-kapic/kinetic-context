@@ -63,6 +63,7 @@ services:
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
+      - XDG_STATE_HOME=/config/.local # separate .local/share/opencode from regular opencode instance
     restart: unless-stopped
 
   kinetic-context:
@@ -99,31 +100,57 @@ if [ ! -f "$COMPOSE_FILE" ]; then
   exit 1
 fi
 
+# Detect container runtime (docker or podman)
+if command -v docker >/dev/null 2>&1; then
+  CONTAINER_CMD="docker"
+elif command -v podman >/dev/null 2>&1; then
+  CONTAINER_CMD="podman"
+else
+  echo "Error: Neither docker nor podman is installed."
+  echo "Please install docker or podman to use kinetic-context."
+  exit 1
+fi
+
 case "${1:-start}" in
   start)
     echo "Starting kinetic-context..."
-    docker compose -f "$COMPOSE_FILE" up -d
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" up -d
     echo "kinetic-context is running!"
     echo "  Web UI: http://localhost:7167"
     echo "  OpenCode: http://localhost:7168"
     ;;
   stop)
     echo "Stopping kinetic-context..."
-    docker compose -f "$COMPOSE_FILE" stop
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" stop
     ;;
   restart)
     echo "Restarting kinetic-context..."
-    docker compose -f "$COMPOSE_FILE" restart
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" restart
     ;;
   status)
-    docker compose -f "$COMPOSE_FILE" ps
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" ps
     ;;
   logs)
-    docker compose -f "$COMPOSE_FILE" logs -f "${2:-}"
+    SERVICE="${2:-}"
+    # Map aliases to service names
+    case "$SERVICE" in
+      kc)
+        SERVICE="kinetic-context"
+        ;;
+      oc)
+        SERVICE="opencode"
+        ;;
+    esac
+    # If no service specified, show logs from both containers
+    if [ -z "$SERVICE" ]; then
+      $CONTAINER_CMD compose -f "$COMPOSE_FILE" logs
+    else
+      $CONTAINER_CMD compose -f "$COMPOSE_FILE" logs "$SERVICE"
+    fi
     ;;
   down)
     echo "Stopping and removing containers..."
-    docker compose -f "$COMPOSE_FILE" down
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" down
     ;;
   *)
     echo "Usage: kctx [start|stop|restart|status|logs|down]"
@@ -133,7 +160,9 @@ case "${1:-start}" in
     echo "  stop     - Stop the services"
     echo "  restart  - Restart the services"
     echo "  status   - Show service status"
-    echo "  logs     - Show logs (optionally specify service: opencode or kinetic-context)"
+    echo "  logs     - Show latest logs from both containers"
+    echo "  logs kc  - Show latest logs from kinetic-context container"
+    echo "  logs oc  - Show latest logs from opencode container"
     echo "  down     - Stop and remove containers"
     exit 1
     ;;

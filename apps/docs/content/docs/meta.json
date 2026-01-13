@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "index",
+    "getting-started",
+    "installation",
+    "configuration",
+    "mcp-server",
+    "api-reference",
+    "docker"
+  ]
+}

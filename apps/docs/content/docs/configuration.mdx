@@ -46,7 +46,40 @@ Common providers include:
 - OpenAI
 - Anthropic
 - Google (Gemini)
+- GitHub Copilot
 - And more...
+
+### GitHub Copilot Authentication
+
+To authenticate with GitHub Copilot, you need to connect to the local OpenCode instance running in the container.
+
+**Note**: This is particularly useful if your employer restricts which AI providers you can use and only allows GitHub Copilot.
+
+#### Authentication Steps
+
+1. **Start kinetic-context** (if not already running):
+   ```bash
+   kctx start
+   ```
+
+2. **Connect to the OpenCode instance**:
+   - Open your browser and navigate to `http://localhost:7168`
+   - This is the OpenCode web interface running in the container
+
+3. **Authenticate with GitHub Copilot**:
+   - In the OpenCode interface, navigate to the provider settings
+   - Select GitHub Copilot as your provider
+   - Follow the authentication flow to sign in with your GitHub account
+   - Complete the OAuth authentication process
+
+4. **Verify authentication**:
+   - Once authenticated, your GitHub Copilot credentials will be stored in the container's state directory (`/config/.local/share/opencode`)
+   - The authentication persists across container restarts because it's stored in the mounted config volume
+
+5. **Configure your opencode.json**:
+   After authenticating, you can configure GitHub Copilot in your `~/.kctx/config/opencode.json` file. See the [OpenCode GitHub Copilot documentation](https://opencode.ai/docs/providers) for the exact configuration format.
+
+The authentication state is stored separately from your regular OpenCode instance (if you have one installed locally) thanks to the `XDG_STATE_HOME=/config/.local` environment variable, which ensures the containerized OpenCode instance uses its own state directory.
 
 ## Package Configuration
 

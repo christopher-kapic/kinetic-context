@@ -34,6 +34,7 @@ services:
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
+      - XDG_STATE_HOME=/config/.local # separate .local/share/opencode from regular opencode instance
     restart: unless-stopped
 
   kinetic-context:
@@ -144,6 +145,7 @@ docker run -d \
   -v ~/.kctx/config:/config \
   -v ~/.kctx/data:/data \
   -e OPENCODE_CONFIG=/config/opencode.json \
+  -e XDG_STATE_HOME=/config/.local \
   ghcr.io/anomalyco/opencode:latest \
   serve --hostname=0.0.0.0
 

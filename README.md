@@ -34,8 +34,9 @@ NODE_ENV=development
 PACKAGES_DIR=./data/packages
 PROJECTS_DIR=./data/projects
 
-# OpenCode Configuration (optional, defaults shown)
+# OpenCode Configuration
 OPENCODE_CONFIG_PATH=./config/opencode.json
+OPENCODE_URL=http://localhost:7168  # URL of your opencode instance (default: http://opencode:4096 for Docker)
 ```
 
 ### Local Development
@@ -53,6 +54,11 @@ mkdir -p data/packages data/projects config
 ```
 
 Create an `opencode.json` config file in the `config` directory (see [OpenCode Configuration](#opencode-configuration) below).
+
+**Note:** For local development, you'll need a running opencode instance. You can either:
+- Use Docker Compose to run opencode: `docker compose up opencode -d` (uses the `compose.yaml` in the root), then set `OPENCODE_URL=http://localhost:7168` in your `.env` file
+- Run opencode via Docker directly: `docker run -d -p 7168:4096 -v $(pwd)/config:/config -v $(pwd)/data:/data ghcr.io/anomalyco/opencode:latest serve --hostname=0.0.0.0`
+- Run opencode locally if you have it set up
 
 Then, run the development server:
 
@@ -154,7 +160,7 @@ docker build -t kinetic-context .
 
 ### Running with Docker
 
-The Docker container requires two volumes:
+kinetic-context requires two services: **opencode** and **kinetic-context**. The Docker setup requires two volumes:
 
 1. **Data volume** - Contains `/packages` and `/projects` subdirectories
 2. **Config volume** - Contains `opencode.json` configuration file
@@ -172,48 +178,75 @@ Example directory structure for the data volume:
     my-project.json
 ```
 
-Run the container:
+**Important:** Before running, you must authenticate to GitHub Container Registry to pull the opencode image:
 
 ```bash
-docker run -d \
-  --name kinetic-context \
-  -p 3000:3000 \
-  -v /path/to/data:/data \
-  -v /path/to/config:/config \
-  -e CORS_ORIGIN=http://localhost:3000 \
-  kinetic-context
+docker login ghcr.io
 ```
 
-Or using Docker Compose:
+You'll need a GitHub Personal Access Token with `read:packages` permission. See the [Getting Started guide](/docs/getting-started) for details.
+
+#### Using Docker Compose (Recommended)
+
+The repository includes a `compose.yaml` file in the root directory. You can use it directly:
+
+```bash
+docker compose up -d
+```
+
+Or create your own `compose.yaml` with the following configuration:
 
 ```yaml
 version: '3.8'
 
 services:
+  opencode:
+    image: ghcr.io/anomalyco/opencode:latest
+    ports:
+      - "7168:4096"
+    volumes:
+      - ./config:/config
+      - ./data:/data
+    command: ["serve", "--hostname=0.0.0.0"]
+    environment:
+      - OPENCODE_CONFIG=/config/opencode.json
+    restart: unless-stopped
+
   kinetic-context:
     build: .
     ports:
-      - "3000:3000"
+      - "7167:3000"
     volumes:
       - ./data:/data
       - ./config:/config
     environment:
-      - CORS_ORIGIN=http://localhost:3000
+      - CORS_ORIGIN=http://localhost:7167
       - NODE_ENV=production
       - PACKAGES_DIR=/data/packages
       - PROJECTS_DIR=/data/projects
       - OPENCODE_CONFIG_PATH=/config/opencode.json
+      - OPENCODE_URL=http://opencode:4096
+    depends_on:
+      - opencode
+    restart: unless-stopped
 ```
+
+Access the web UI at [http://localhost:7167](http://localhost:7167).
+
+#### Using Docker Run
+
+For a single container setup (without opencode), you would need to run opencode separately. However, Docker Compose is recommended as it manages both services together.
 
 ### Environment Variables
 
-The following environment variables can be set:
+The following environment variables can be set for the kinetic-context service:
 
 - `CORS_ORIGIN` (required) - CORS origin URL
 - `NODE_ENV` (optional) - `development` or `production` (default: `development`)
 - `PACKAGES_DIR` (optional) - Path to packages directory (default: `/data/packages`)
 - `PROJECTS_DIR` (optional) - Path to projects directory (default: `/data/projects`)
 - `OPENCODE_CONFIG_PATH` (optional) - Path to opencode.json config (default: `/config/opencode.json`)
+- `OPENCODE_URL` (required in Docker) - URL of the opencode service (default: `http://opencode:4096` in Docker, or set to your local opencode instance URL for development)
 
 ## Available Scripts
 

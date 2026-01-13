@@ -26,7 +26,7 @@ const CreatePackageInputSchema = z.object({
   package_manager: z.string(), // Can be empty
   display_name: z.string().min(1),
   storage_type: z.enum(["cloned", "existing"]),
-  repo_path: z.string().min(1), // Absolute path for existing, or will be set for cloned
+  repo_path: z.string().optional(), // Only required for existing repos, calculated for cloned
   default_tag: z.string().optional(), // Only for cloned repos, can be "auto" or a specific branch/tag
   urls: z.object({
     website: z.string().optional(),
@@ -35,15 +35,23 @@ const CreatePackageInputSchema = z.object({
     git: z.string().optional(), // Required for cloned repos
     logo: z.string().optional(),
   }),
-}).refine((data) => {
+}).superRefine((data, ctx) => {
   // If cloned, git URL is required
   if (data.storage_type === "cloned" && !data.urls.git) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Git URL is required for cloned repositories",
+      path: ["urls", "git"],
+    });
   }
-  return true;
-}, {
-  message: "Git URL is required for cloned repositories",
-  path: ["urls", "git"],
+  // If existing, repo_path is required
+  if (data.storage_type === "existing" && !data.repo_path) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Repository path is required for existing repositories",
+      path: ["repo_path"],
+    });
+  }
 });
 
 const UpdatePackageInputSchema = z.object({

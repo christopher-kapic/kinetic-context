@@ -32,7 +32,7 @@ const createPackageSchema = z.object({
   package_manager: z.string(), // Can be empty
   display_name: z.string().min(1, "Display name is required"),
   storage_type: z.enum(["cloned", "existing"]),
-  repo_path: z.string().min(1, "Repository path is required"),
+  repo_path: z.string().optional(), // Only required for existing repos
   default_tag_auto: z.boolean(),
   default_tag: z.string().optional(),
   git: z.string().url("Git URL must be a valid URL").optional().or(z.literal("")),
@@ -40,19 +40,31 @@ const createPackageSchema = z.object({
   docs: z.string().url().optional().or(z.literal("")),
   git_browser: z.string().url().optional().or(z.literal("")),
   logo: z.string().url().optional().or(z.literal("")),
-}).refine((data) => {
+}).superRefine((data, ctx) => {
   // For cloned repos, git URL is required
   if (data.storage_type === "cloned" && !data.git) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Git URL is required for cloned repositories",
+      path: ["git"],
+    });
+  }
+  // For existing repos, repo_path is required
+  if (data.storage_type === "existing" && !data.repo_path) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Repository path is required for existing repositories",
+      path: ["repo_path"],
+    });
   }
   // For cloned repos, if auto is not selected, default_tag is required
   if (data.storage_type === "cloned" && !data.default_tag_auto && !data.default_tag) {
-    return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Default tag is required when auto-detect is disabled",
+      path: ["default_tag"],
+    });
   }
-  return true;
-}, {
-  message: "Validation failed",
-  path: ["storage_type"],
 });
 
 type CreatePackageForm = z.infer<typeof createPackageSchema>;
@@ -125,7 +137,8 @@ export function CreatePackageDialog({
         package_manager: value.package_manager,
         display_name: value.display_name,
         storage_type: value.storage_type,
-        repo_path: value.repo_path,
+        // Only send repo_path for existing repos (backend calculates it for cloned repos)
+        repo_path: value.storage_type === "existing" ? value.repo_path : undefined,
         default_tag: value.storage_type === "cloned" 
           ? (value.default_tag_auto ? "auto" : value.default_tag || "main")
           : undefined,
@@ -173,10 +186,10 @@ export function CreatePackageDialog({
           </div>
         )}
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            form.handleSubmit();
+            await form.handleSubmit();
           }}
           className="space-y-4"
         >

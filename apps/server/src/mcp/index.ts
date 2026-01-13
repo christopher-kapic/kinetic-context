@@ -10,7 +10,6 @@ import {
   type PackageConfig,
 } from "../utils/config.js";
 import { ensureRepoAvailable, checkoutTag } from "../utils/git.js";
-import { env } from "@kinetic-context/env/server";
 import { queryOpencode } from "../utils/opencode.js";
 
 export function createMcpServer(): McpServer {

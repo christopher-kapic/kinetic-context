@@ -45,6 +45,13 @@ function PackageChatPage() {
           </Link>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+              {pkg.data.urls?.logo && (
+                <img
+                  src={pkg.data.urls.logo}
+                  alt={`${pkg.data.display_name} logo`}
+                  className="size-8 object-contain"
+                />
+              )}
               {pkg.data.display_name}
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">

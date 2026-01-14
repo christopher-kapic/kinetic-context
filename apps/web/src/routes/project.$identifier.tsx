@@ -100,13 +100,22 @@ function ProjectDetailComponent() {
                       key={dep.identifier}
                       className="flex items-center justify-between p-3 border rounded-none"
                     >
-                      <div>
-                        <div className="font-medium text-sm">
-                          {pkg?.display_name || dep.identifier}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {dep.identifier}
-                          {dep.tag && ` @ ${dep.tag}`}
+                      <div className="flex items-center gap-2">
+                        {pkg?.urls?.logo && (
+                          <img
+                            src={pkg.urls.logo}
+                            alt={`${pkg.display_name || dep.identifier} logo`}
+                            className="size-5 object-contain"
+                          />
+                        )}
+                        <div>
+                          <div className="font-medium text-sm">
+                            {pkg?.display_name || dep.identifier}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {dep.identifier}
+                            {dep.tag && ` @ ${dep.tag}`}
+                          </div>
                         </div>
                       </div>
                       <Button

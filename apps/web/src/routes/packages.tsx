@@ -57,6 +57,13 @@ function PackagesComponent() {
               <Card className="hover:bg-accent transition-colors cursor-pointer h-full">
                 <CardHeader>
                   <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                    {pkg.urls?.logo && (
+                      <img
+                        src={pkg.urls.logo}
+                        alt={`${pkg.display_name} logo`}
+                        className="size-6 object-contain"
+                      />
+                    )}
                     {pkg.display_name}
                     {pkg.cloneStatus === "cloning" && (
                       <Loader2 className="size-4 animate-spin text-muted-foreground" />

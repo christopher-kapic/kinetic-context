@@ -58,6 +58,7 @@ export type ProjectDependency = z.infer<typeof ProjectDependencySchema>;
 export async function readPackageConfig(
   packagesDir: string,
   identifier: string,
+  silent: boolean = false,
 ): Promise<PackageConfig | null> {
   try {
     // Handle nested paths (e.g., @tanstack/ai -> @tanstack/ai.json)
@@ -104,11 +105,16 @@ export async function readPackageConfig(
       return migrated;
     }
     
-    // Neither schema matched
-    console.error(`[config] Failed to parse package config ${identifier}: Invalid schema`);
+    // Neither schema matched - only log if not silent
+    if (!silent) {
+      console.error(`[config] Failed to parse package config ${identifier}: Invalid schema`);
+    }
     return null;
   } catch (error) {
-    console.error(`[config] Error reading package config ${identifier}:`, error);
+    // Only log if not silent
+    if (!silent) {
+      console.error(`[config] Error reading package config ${identifier}:`, error);
+    }
     return null;
   }
 }
@@ -131,8 +137,19 @@ export async function listPackageConfigs(
   packagesDir: string,
 ): Promise<PackageConfig[]> {
   try {
-    const { readdir, stat } = await import("node:fs/promises");
+    const { readdir, stat, access } = await import("node:fs/promises");
+    const { constants } = await import("node:fs");
     const configs: PackageConfig[] = [];
+
+    async function isGitRepository(dir: string): Promise<boolean> {
+      try {
+        const gitPath = join(dir, ".git");
+        await access(gitPath, constants.F_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    }
 
     async function scanDirectory(dir: string, prefix: string = ""): Promise<void> {
       const entries = await readdir(dir);
@@ -142,13 +159,18 @@ export async function listPackageConfigs(
         const stats = await stat(fullPath);
         
         if (stats.isDirectory()) {
-          // Recursively scan subdirectories
+          // Skip git repositories (cloned repos)
+          if (await isGitRepository(fullPath)) {
+            continue;
+          }
+          // Recursively scan subdirectories (for scoped packages like @hookform/)
           await scanDirectory(fullPath, prefix ? `${prefix}/${entry}` : entry);
         } else if (entry.endsWith(".json")) {
           const identifier = prefix
             ? `${prefix}/${entry.replace(/\.json$/, "")}`
             : entry.replace(/\.json$/, "");
-          const config = await readPackageConfig(packagesDir, identifier);
+          // Use silent=true to suppress error logs when scanning
+          const config = await readPackageConfig(packagesDir, identifier, true);
           if (config) {
             configs.push(config);
           }

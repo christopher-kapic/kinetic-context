@@ -44,6 +44,13 @@ function PackageDetailComponent() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+                  {pkg.data.urls?.logo && (
+                    <img
+                      src={pkg.data.urls.logo}
+                      alt={`${pkg.data.display_name} logo`}
+                      className="size-8 object-contain"
+                    />
+                  )}
                   {pkg.data.display_name}
                   {pkg.data.cloneStatus === "cloning" && (
                     <Loader2 className="size-5 animate-spin text-muted-foreground" />

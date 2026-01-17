@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreatePackageDialog } from "@/components/dialogs/create-package-dialog";
-import { Plus, Loader2, Search, X } from "lucide-react";
+import { ExportPackagesDialog } from "@/components/dialogs/export-packages-dialog";
+import { ImportPackagesDialog } from "@/components/dialogs/import-packages-dialog";
+import { Plus, Loader2, Search, X, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -56,7 +58,7 @@ function PackagesComponent() {
             Manage your package configurations
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
             onClick={handleScan}
@@ -66,6 +68,18 @@ function PackagesComponent() {
             <Search className="size-4 mr-2" />
             {scanQuery.isFetching ? "Scanning..." : "Scan Projects"}
           </Button>
+          <ExportPackagesDialog>
+            <Button variant="outline" className="w-full sm:w-auto">
+              <Download className="size-4 mr-2" />
+              Export
+            </Button>
+          </ExportPackagesDialog>
+          <ImportPackagesDialog>
+            <Button variant="outline" className="w-full sm:w-auto">
+              <Upload className="size-4 mr-2" />
+              Import
+            </Button>
+          </ImportPackagesDialog>
           <CreatePackageDialog>
             <Button className="w-full sm:w-auto">
               <Plus className="size-4 mr-2" />

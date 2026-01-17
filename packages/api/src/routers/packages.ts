@@ -357,7 +357,7 @@ export const packagesRouter = {
       return models;
   }),
 
-  scanProjects: publicProcedure.query(async () => {
+  scanProjects: publicProcedure.handler(async () => {
     // Recursively scan projects directory for git repositories
     const discoveredRepos = await discoverGitRepositories(env.PROJECTS_DIR);
     

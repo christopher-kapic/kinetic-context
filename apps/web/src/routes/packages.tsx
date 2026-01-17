@@ -57,13 +57,13 @@ function PackagesComponent() {
           </Button>
           <ExportPackagesDialog>
             <Button variant="outline" className="w-full sm:w-auto">
-              <Download className="size-4 mr-2" />
+              <Upload className="size-4 mr-2" />
               Export
             </Button>
           </ExportPackagesDialog>
           <ImportPackagesDialog>
             <Button variant="outline" className="w-full sm:w-auto">
-              <Upload className="size-4 mr-2" />
+              <Download className="size-4 mr-2" />
               Import
             </Button>
           </ImportPackagesDialog>

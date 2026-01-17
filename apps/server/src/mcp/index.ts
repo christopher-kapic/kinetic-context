@@ -127,7 +127,7 @@ export function createMcpServer(): McpServer {
   // Tool: query_dependency
   mcpServer.tool(
     "query_dependency",
-    "Queries a dependency to answer questions about how to use it",
+    "Queries a dependency to answer questions about how to use it. Call list_dependencies first to ensure the correct package identifier is used.",
     {
       project_identifier: z
         .string()
@@ -139,11 +139,18 @@ export function createMcpServer(): McpServer {
         .string()
         .describe("The dependency identifier to query"),
       query: z.string().describe("The question to ask about the dependency"),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          "Optional session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions.",
+        ),
     },
     async ({
       project_identifier,
       dependency_identifier,
       query,
+      sessionId,
     }): Promise<CallToolResult> => {
       try {
         // Get package config
@@ -195,13 +202,20 @@ export function createMcpServer(): McpServer {
         }
 
         // Query opencode
-        const response = await queryOpencode(repoPath, query);
+        const result = await queryOpencode(repoPath, query, sessionId);
 
         return {
           content: [
             {
               type: "text",
-              text: response,
+              text: JSON.stringify(
+                {
+                  response: result.response,
+                  sessionId: result.sessionId,
+                },
+                null,
+                2,
+              ),
             },
           ],
         };
@@ -240,11 +254,18 @@ export function createMcpServer(): McpServer {
         .describe(
           "The question to ask about how the dependencies work together",
         ),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          "Optional session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions.",
+        ),
     },
     async ({
       project_identifier,
       dependency_identifiers,
       query,
+      sessionId,
     }): Promise<CallToolResult> => {
       try {
         // Get all package configs
@@ -319,13 +340,20 @@ export function createMcpServer(): McpServer {
 
         // Query opencode with the first repo as primary context
         // In a more sophisticated implementation, we might combine all repos
-        const response = await queryOpencode(repoPaths[0], fullQuery);
+        const result = await queryOpencode(repoPaths[0], fullQuery, sessionId);
 
         return {
           content: [
             {
               type: "text",
-              text: response,
+              text: JSON.stringify(
+                {
+                  response: result.response,
+                  sessionId: result.sessionId,
+                },
+                null,
+                2,
+              ),
             },
           ],
         };

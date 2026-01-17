@@ -221,7 +221,8 @@ export async function* queryOpencodeStream(
 export async function queryOpencode(
   repoPath: string,
   query: string,
-): Promise<string> {
+  sessionId?: string,
+): Promise<{ response: string; sessionId: string }> {
   console.log(`[opencode] Starting query for directory: ${repoPath}`);
   console.log(`[opencode] Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`);
   
@@ -258,40 +259,45 @@ export async function queryOpencode(
     directory: repoPath,
   });
 
-  // Create a session
-  const sessionTitle = `Query: ${query.substring(0, 50)}`;
-  console.log(`[opencode] Creating session with title: ${sessionTitle}`);
-  const sessionResult = await client.session.create({
-    body: { title: sessionTitle },
-  });
+  // Create or reuse session
+  let currentSessionId = sessionId;
+  if (!currentSessionId) {
+    const sessionTitle = `Query: ${query.substring(0, 50)}`;
+    console.log(`[opencode] Creating session with title: ${sessionTitle}`);
+    const sessionResult = await client.session.create({
+      body: { title: sessionTitle },
+    });
 
-  console.log(`[opencode] Session create result:`, {
-    hasError: !!sessionResult.error,
-    hasData: !!sessionResult.data,
-    error: sessionResult.error ? JSON.stringify(sessionResult.error, null, 2) : null,
-    dataId: sessionResult.data?.id,
-  });
+    console.log(`[opencode] Session create result:`, {
+      hasError: !!sessionResult.error,
+      hasData: !!sessionResult.data,
+      error: sessionResult.error ? JSON.stringify(sessionResult.error, null, 2) : null,
+      dataId: sessionResult.data?.id,
+    });
 
-  if (sessionResult.error || !sessionResult.data) {
-    const errorDetails = sessionResult.error 
-      ? JSON.stringify(sessionResult.error, null, 2)
-      : "No error object provided";
-    console.error(`[opencode] Session creation failed. Error details:`, errorDetails);
-    console.error(`[opencode] Full session result:`, JSON.stringify(sessionResult, null, 2));
-    throw new Error(
-      `Failed to create opencode session: ${sessionResult.error?.message || JSON.stringify(sessionResult.error) || "Unknown error"}`,
-    );
+    if (sessionResult.error || !sessionResult.data) {
+      const errorDetails = sessionResult.error 
+        ? JSON.stringify(sessionResult.error, null, 2)
+        : "No error object provided";
+      console.error(`[opencode] Session creation failed. Error details:`, errorDetails);
+      console.error(`[opencode] Full session result:`, JSON.stringify(sessionResult, null, 2));
+      throw new Error(
+        `Failed to create opencode session: ${sessionResult.error?.message || JSON.stringify(sessionResult.error) || "Unknown error"}`,
+      );
+    }
+
+    currentSessionId = sessionResult.data.id;
+    console.log(`[opencode] Session created successfully: ${currentSessionId}`);
+    console.log(`[opencode] Session ID type: ${typeof currentSessionId}, starts with 'ses': ${String(currentSessionId).startsWith('ses')}`);
+  } else {
+    console.log(`[opencode] Reusing existing session: ${currentSessionId}`);
   }
-
-  const sessionId = sessionResult.data.id;
-  console.log(`[opencode] Session created successfully: ${sessionId}`);
-  console.log(`[opencode] Session ID type: ${typeof sessionId}, starts with 'ses': ${String(sessionId).startsWith('ses')}`);
 
   try {
     // Use prompt to send the message (streaming endpoint)
-    console.log(`[opencode] Sending prompt message to session ${sessionId}`);
+    console.log(`[opencode] Sending prompt message to session ${currentSessionId}`);
     const promptResult = await client.session.prompt({
-      path: { id: sessionId },
+      path: { id: currentSessionId },
       body: {
         parts: [
           {
@@ -333,7 +339,7 @@ export async function queryOpencode(
         const lastTextPart = textParts[textParts.length - 1];
         const responseText = lastTextPart.text;
         console.log(`[opencode] Received immediate response (${responseText.length} characters)`);
-        return responseText;
+        return { response: responseText, sessionId: currentSessionId };
       }
     }
 
@@ -343,7 +349,7 @@ export async function queryOpencode(
     await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds for streaming
 
     // Use direct HTTP request to bypass SDK bug with sessionID validation
-    const messagesUrl = `${opencodeUrl}/session/${encodeURIComponent(sessionId)}/message?limit=5`;
+    const messagesUrl = `${opencodeUrl}/session/${encodeURIComponent(currentSessionId)}/message?limit=5`;
     if (repoPath) {
       // Add directory as query parameter if we have it
       const encodedDir = encodeURIComponent(repoPath);
@@ -394,7 +400,7 @@ export async function queryOpencode(
       const lastTextPart = textParts[textParts.length - 1];
       const responseText = lastTextPart.text;
       console.log(`[opencode] Received response from HTTP messages (${responseText.length} characters)`);
-      return responseText;
+      return { response: responseText, sessionId: currentSessionId };
     } else {
       throw new Error(`Cannot fetch messages: no repository path available`);
     }

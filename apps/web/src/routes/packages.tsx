@@ -35,19 +35,6 @@ function PackagesComponent() {
     scanQuery.refetch();
     setScanDialogOpen(true);
   };
-      onSuccess: (data) => {
-        toast.success(`Found ${data.length} git repositories`);
-      },
-      onError: (error: any) => {
-        toast.error(error.message || "Failed to scan projects directory");
-      },
-    })
-  );
-
-  const handleScan = () => {
-    scanMutation.mutate();
-    setScanDialogOpen(true);
-  };
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6 sm:py-8">

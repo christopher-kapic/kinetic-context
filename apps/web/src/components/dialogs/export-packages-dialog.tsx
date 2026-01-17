@@ -29,7 +29,7 @@ export function ExportPackagesDialog({ children }: ExportPackagesDialogProps) {
   const [copied, setCopied] = useState(false);
   const packages = useQuery(orpc.packages.list.queryOptions());
 
-  // Filter out packages with local/existing storage types (they have system-specific paths)
+  // Filter out packages with local storage types (they have system-specific paths)
   const exportablePackages = useMemo(() => {
     if (!packages.data) return [];
     return packages.data.filter((pkg) => pkg.storage_type === "cloned");
@@ -100,7 +100,7 @@ export function ExportPackagesDialog({ children }: ExportPackagesDialogProps) {
         <DialogHeader>
           <DialogTitle>Export Packages</DialogTitle>
           <DialogDescription>
-            Select packages to export. Only "cloned" packages can be exported (local/existing packages
+            Select packages to export. Only "cloned" packages can be exported (local packages
             have system-specific paths).
           </DialogDescription>
         </DialogHeader>

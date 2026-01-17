@@ -51,7 +51,7 @@ function PackagesComponent() {
     if (filter === "all") return true;
     if (filter === "projects") {
       // Projects are local repositories
-      return pkg.storage_type === "local" || pkg.storage_type === "existing";
+      return pkg.storage_type === "local";
     }
     if (filter === "packages") {
       // Packages are cloned repositories
@@ -215,14 +215,14 @@ function PackagesComponent() {
                   <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
-                        {pkg.storage_type === "cloned" ? "Cloned" : pkg.storage_type === "local" ? "Local" : "Existing"}
+                        {pkg.storage_type === "cloned" ? "Cloned" : "Local"}
                       </span>
                     </div>
                     <div>Manager: {pkg.package_manager || "N/A"}</div>
                     {pkg.storage_type === "cloned" && (
                       <div>Tag: {pkg.default_tag || "N/A"}</div>
                     )}
-                    {(pkg.storage_type === "local" || pkg.storage_type === "existing") && (
+                    {pkg.storage_type === "local" && (
                       <div className="text-xs font-mono truncate" title={pkg.repo_path}>
                         Path: {pkg.repo_path}
                       </div>

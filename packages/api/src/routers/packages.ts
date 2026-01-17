@@ -25,8 +25,8 @@ const CreatePackageInputSchema = z.object({
   identifier: z.string().min(1),
   package_manager: z.string(), // Can be empty
   display_name: z.string().min(1),
-  storage_type: z.enum(["cloned", "local", "existing"]),
-  repo_path: z.string().optional(), // Required for local/existing repos, calculated for cloned
+  storage_type: z.enum(["cloned", "local"]),
+  repo_path: z.string().optional(), // Required for local repos, calculated for cloned
   default_tag: z.string().optional(), // Only for cloned repos, can be "auto" or a specific branch/tag
   urls: z.object({
     website: z.string().optional(),
@@ -44,11 +44,11 @@ const CreatePackageInputSchema = z.object({
       path: ["urls", "git"],
     });
   }
-  // If local or existing, repo_path is required
-  if ((data.storage_type === "local" || data.storage_type === "existing") && !data.repo_path) {
+  // If local, repo_path is required
+  if (data.storage_type === "local" && !data.repo_path) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Repository path is required for local/existing repositories",
+      message: "Repository path is required for local repositories",
       path: ["repo_path"],
     });
   }
@@ -58,7 +58,7 @@ const UpdatePackageInputSchema = z.object({
   identifier: z.string().min(1),
   package_manager: z.string().optional(),
   display_name: z.string().min(1).optional(),
-  storage_type: z.enum(["cloned", "local", "existing"]).optional(),
+  storage_type: z.enum(["cloned", "local"]).optional(),
   repo_path: z.string().optional(),
   default_tag: z.string().optional(),
   urls: z
@@ -73,11 +73,11 @@ const UpdatePackageInputSchema = z.object({
 });
 
 // Helper function to get the correct packages directory based on storage type
-function getPackagesDir(storageType: "cloned" | "local" | "existing"): string {
+function getPackagesDir(storageType: "cloned" | "local"): string {
   if (storageType === "cloned") {
     return env.PACKAGES_DIR;
   } else {
-    // local and existing both use LOCAL_PACKAGES_DIR
+    // local uses LOCAL_PACKAGES_DIR
     return env.LOCAL_PACKAGES_DIR;
   }
 }
@@ -90,7 +90,7 @@ async function findPackageConfig(identifier: string): Promise<{ config: PackageC
     return { config, dir: env.PACKAGES_DIR };
   }
   
-  // Try local packages directory (local/existing repos)
+  // Try local packages directory (local repos)
   config = await readPackageConfig(env.LOCAL_PACKAGES_DIR, identifier, true);
   if (config) {
     return { config, dir: env.LOCAL_PACKAGES_DIR };
@@ -210,19 +210,18 @@ export const packagesRouter = {
         repoPath = join(env.PACKAGES_DIR, repoIdentifier);
         packagesDir = env.PACKAGES_DIR;
       } else {
-        // For local/existing repos, use the provided path
+        // For local repos, use the provided path
         if (!input.repo_path) {
           throw new ORPCError({
             code: "BAD_REQUEST",
-            message: "Repository path is required for local/existing repositories",
+            message: "Repository path is required for local repositories",
           });
         }
         repoPath = input.repo_path;
         packagesDir = env.LOCAL_PACKAGES_DIR;
       }
 
-      // Migrate 'existing' to 'local'
-      const storageType = input.storage_type === "existing" ? "local" : input.storage_type;
+      const storageType = input.storage_type;
 
       const pkg: PackageConfig = {
         identifier: input.identifier,
@@ -246,7 +245,7 @@ export const packagesRouter = {
           }
         );
       } else {
-        // For local/existing repos, mark as completed immediately
+        // For local repos, mark as completed immediately
         cloneStatus.set(input.identifier, "completed");
       }
 
@@ -270,11 +269,8 @@ export const packagesRouter = {
       const existing = found.config;
       const currentDir = found.dir;
 
-      // Determine new storage type (migrate 'existing' to 'local')
-      let newStorageType = input.storage_type ?? existing.storage_type;
-      if (newStorageType === "existing") {
-        newStorageType = "local";
-      }
+      // Determine new storage type
+      const newStorageType = input.storage_type ?? existing.storage_type;
 
       // Determine if we need to move the package to a different directory
       const newDir = getPackagesDir(newStorageType);

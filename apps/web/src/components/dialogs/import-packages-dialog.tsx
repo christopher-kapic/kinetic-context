@@ -27,7 +27,7 @@ const ImportPackageSchema = z.object({
   identifier: z.string().min(1),
   package_manager: z.string(),
   display_name: z.string().min(1),
-  storage_type: z.enum(["cloned", "local", "existing"]),
+  storage_type: z.enum(["cloned", "local"]),
   default_tag: z.string().optional(),
   urls: z.object({
     website: z.string().optional(),
@@ -126,11 +126,11 @@ export function ImportPackagesDialog({ children }: ImportPackagesDialogProps) {
           continue;
         }
 
-        // Filter out local/existing storage types that can't be imported
-        if (pkg.storage_type === "local" || pkg.storage_type === "existing") {
+        // Filter out local storage types that can't be imported
+        if (pkg.storage_type === "local") {
           result.errors.push({
             identifier: pkg.identifier,
-            error: "Cannot import local/existing packages (system-specific paths required)",
+            error: "Cannot import local packages (system-specific paths required)",
           });
           continue;
         }

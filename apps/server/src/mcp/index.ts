@@ -188,7 +188,7 @@ export function createMcpServer(): McpServer {
           }
         }
 
-        // Ensure repo is available (cloned or existing)
+        // Ensure repo is available (cloned or local)
         const repoPath = await ensureRepoAvailable(
           packageConfig.repo_path,
           packageConfig.storage_type,
@@ -315,7 +315,7 @@ export function createMcpServer(): McpServer {
             }
           }
 
-          // Ensure repo is available (cloned or existing)
+          // Ensure repo is available (cloned or local)
           const repoPath = await ensureRepoAvailable(
             config.repo_path,
             config.storage_type,

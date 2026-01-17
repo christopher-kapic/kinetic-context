@@ -30,8 +30,8 @@ const updatePackageSchema = z.object({
   identifier: z.string().min(1, "Identifier is required"),
   package_manager: z.string(), // Can be empty
   display_name: z.string().min(1, "Display name is required"),
-  storage_type: z.enum(["cloned", "local", "existing"]),
-  repo_path: z.string().optional(), // Required for local/existing repos
+  storage_type: z.enum(["cloned", "local"]),
+  repo_path: z.string().optional(), // Required for local repos
   default_tag_auto: z.boolean(),
   default_tag: z.string().optional(),
   git: z.string().url("Git URL must be a valid URL").optional().or(z.literal("")),
@@ -48,11 +48,11 @@ const updatePackageSchema = z.object({
       path: ["git"],
     });
   }
-  // For local/existing repos, repo_path is required
-  if ((data.storage_type === "local" || data.storage_type === "existing") && !data.repo_path) {
+  // For local repos, repo_path is required
+  if (data.storage_type === "local" && !data.repo_path) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Repository path is required for local/existing repositories",
+      message: "Repository path is required for local repositories",
       path: ["repo_path"],
     });
   }
@@ -127,7 +127,7 @@ export function EditPackageDialog({
         package_manager: value.package_manager || undefined,
         display_name: value.display_name,
         storage_type: value.storage_type,
-        repo_path: (value.storage_type === "local" || value.storage_type === "existing") ? value.repo_path : undefined,
+        repo_path: value.storage_type === "local" ? value.repo_path : undefined,
         default_tag: value.storage_type === "cloned" 
           ? (value.default_tag_auto ? "auto" : value.default_tag || "main")
           : undefined,
@@ -146,7 +146,7 @@ export function EditPackageDialog({
   useEffect(() => {
     if (packageQuery.data && open) {
       const pkg = packageQuery.data;
-      const storageType = pkg.storage_type === "existing" ? "local" : pkg.storage_type;
+      const storageType = pkg.storage_type;
       const defaultTagAuto = pkg.default_tag === "auto";
       
       form.setFieldValue("identifier", pkg.identifier);
@@ -294,10 +294,10 @@ export function EditPackageDialog({
                   <Select
                     value={field.state.value}
                     onValueChange={(value) => {
-                      field.handleChange(value as "cloned" | "local" | "existing");
+                      field.handleChange(value as "cloned" | "local");
                       // Reset repo_path when switching types
                       form.setFieldValue("repo_path", "");
-                      if (value === "local" || value === "existing") {
+                      if (value === "local") {
                         form.setFieldValue("git", "");
                         form.setFieldValue("default_tag_auto", false);
                         form.setFieldValue("default_tag", "");
@@ -312,7 +312,6 @@ export function EditPackageDialog({
                     <SelectContent>
                       <SelectItem value="cloned">Clone Repository</SelectItem>
                       <SelectItem value="local">Local Repository</SelectItem>
-                      <SelectItem value="existing">Existing Repository (Legacy)</SelectItem>
                     </SelectContent>
                   </Select>
                   {isInvalid && field.state.meta.errors && (
@@ -325,7 +324,7 @@ export function EditPackageDialog({
             }}
           </form.Field>
 
-          {(form.state.values.storage_type === "local" || form.state.values.storage_type === "existing") ? (
+          {form.state.values.storage_type === "local" ? (
             <form.Field name="repo_path">
               {(field) => {
                 const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;

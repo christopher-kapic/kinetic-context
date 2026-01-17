@@ -85,18 +85,18 @@ export async function ensureRepoCloned(
 
 /**
  * Ensure a repository is available at the given path.
- * For existing repos, just verifies the path exists.
+ * For local repos, just verifies the path exists.
  * For cloned repos, uses the git URL to determine the shared repo location
  * (so multiple packages from the same repo share the same clone).
  */
 export async function ensureRepoAvailable(
   repoPath: string,
-  storageType: "cloned" | "local" | "existing",
+  storageType: "cloned" | "local",
   gitUrl?: string,
   packagesDir?: string,
 ): Promise<string> {
-  if (storageType === "local" || storageType === "existing") {
-    // For local/existing repos, just verify the path exists
+  if (storageType === "local") {
+    // For local repos, just verify the path exists
     if (!existsSync(repoPath)) {
       throw new Error(
         `Repository path does not exist: ${repoPath}. Please verify the path is correct.`,
@@ -124,7 +124,7 @@ export async function ensureRepoAvailable(
 
 /**
  * Checkout a tag/branch in a repository.
- * Only works for cloned repos. Existing repos should not have tags checked out.
+ * Only works for cloned repos. Local repos should not have tags checked out.
  */
 export async function checkoutTag(
   repoPath: string,

@@ -142,7 +142,7 @@ This allows you to:
 
 ## How It Works
 
-1. **Package Cloning**: When a dependency is first queried, kinetic-context clones the repository to `/data/packages/{identifier}/`
+1. **Package Cloning**: When a dependency is first queried, kinetic-context clones the repository to `/packages/{identifier}/`
 
 2. **Version Checkout**: If a project identifier is provided and specifies a tag, the system checks out that specific tag
 
@@ -173,7 +173,7 @@ kctx status
 
 ### Dependency Not Found
 
-1. Verify the dependency is configured in `/data/packages/{identifier}.json`
+1. Verify the dependency is configured in `/packages/{identifier}.json`
 2. Check that the repository can be cloned
 3. Ensure the identifier matches exactly
 
@@ -185,4 +185,4 @@ kctx status
 
 ### OpenCode Errors
 
-Check the OpenCode configuration and API key in `~/.kctx/config/opencode.json`
+Check the OpenCode configuration and API key in `~/.kctx/opencode/config/opencode.json`

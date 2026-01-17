@@ -14,7 +14,7 @@ Manual installation is the recommended approach as it gives you full visibility 
 ### Step 1: Create Directory Structure
 
 ```bash
-mkdir -p ~/.kctx/{bin,config,data/{packages,projects}}
+mkdir -p ~/.kctx/{bin,packages,local-packages,projects,opencode/{config,state}}
 ```
 
 ### Step 2: Create Docker Compose File
@@ -30,12 +30,12 @@ services:
     ports:
       - "7168:4096"
     volumes:
-      - ~/.kctx/config:/config
-      - ~/.kctx/data:/data
+      - ~/.kctx/opencode/config:/config
+      - ~/.kctx/opencode/state:/state
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
-      - XDG_STATE_HOME=/config/.local # separate .local/share/opencode from regular opencode instance
+      - XDG_STATE_HOME=/state # separate state volume for persistence
     restart: unless-stopped
 
   kinetic-context:
@@ -43,13 +43,16 @@ services:
     ports:
       - "7167:3000"
     volumes:
-      - ~/.kctx/data:/data
-      - ~/.kctx/config:/config
+      - ~/.kctx/packages:/packages
+      - ~/.kctx/local-packages:/local-packages
+      - ~/.kctx/projects:/projects
+      - ~/.kctx/opencode/config:/config
     environment:
       - CORS_ORIGIN=http://localhost:7167
       - NODE_ENV=production
-      - PACKAGES_DIR=/data/packages
-      - PROJECTS_DIR=/data/projects
+      - PACKAGES_DIR=/packages
+      - LOCAL_PACKAGES_DIR=/local-packages
+      - PROJECTS_DIR=/projects
       - OPENCODE_CONFIG_PATH=/config/opencode.json
       - OPENCODE_URL=http://opencode:4096
     depends_on:
@@ -59,7 +62,7 @@ services:
 
 ### Step 3: Create OpenCode Configuration
 
-Create `~/.kctx/config/opencode.json`:
+Create `~/.kctx/opencode/config/opencode.json`:
 
 ```json
 {
@@ -133,11 +136,13 @@ The installation script creates the following structure:
 ~/.kctx/
 ├── bin/
 │   └── kctx              # Command-line tool
-├── config/
-│   └── opencode.json    # OpenCode configuration
-├── data/
-│   ├── packages/        # Package repositories and configs
-│   └── projects/        # Project configurations
+├── packages/             # Package repositories and configs
+├── local-packages/       # Local package repositories
+├── projects/             # Project configurations
+├── opencode/
+│   ├── config/
+│   │   └── opencode.json # OpenCode configuration
+│   └── state/            # OpenCode state (persists across restarts)
 └── compose.yaml          # Docker Compose configuration
 ```
 
@@ -151,7 +156,7 @@ After running the script, you need to:
    ```
    You'll need a GitHub Personal Access Token with `read:packages` permission. See [Getting Started](/docs/getting-started#step-2-authenticate-to-github-container-registry) for details.
 
-2. **Configure OpenCode** - Edit `~/.kctx/config/opencode.json` with your API key
+2. **Configure OpenCode** - Edit `~/.kctx/opencode/config/opencode.json` with your API key
 
 3. **Add kctx to PATH** - Add `~/.kctx/bin` to your PATH environment variable
 

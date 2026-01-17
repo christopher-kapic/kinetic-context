@@ -190,7 +190,7 @@ Example directory structure:
   /opencode.json
 
 /state (opencode state)
-  /.local/state/opencode/
+  /opencode/
 ```
 
 **Important:** Before running, you must authenticate to GitHub Container Registry to pull the opencode image:

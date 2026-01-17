@@ -29,12 +29,12 @@ services:
     ports:
       - "7168:4096"
     volumes:
-      - ~/.kctx/config:/config
-      - ~/.kctx/data:/data
+      - ~/.kctx/opencode/config:/config
+      - ~/.kctx/opencode/state:/state
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
-      - XDG_STATE_HOME=/config/.local # separate .local/share/opencode from regular opencode instance
+      - XDG_STATE_HOME=/state # separate state volume for persistence
     restart: unless-stopped
 
   kinetic-context:
@@ -42,13 +42,16 @@ services:
     ports:
       - "7167:3000"
     volumes:
-      - ~/.kctx/data:/data
-      - ~/.kctx/config:/config
+      - ~/.kctx/packages:/packages
+      - ~/.kctx/local-packages:/local-packages
+      - ~/.kctx/projects:/projects
+      - ~/.kctx/opencode/config:/config
     environment:
       - CORS_ORIGIN=http://localhost:7167
       - NODE_ENV=production
-      - PACKAGES_DIR=/data/packages
-      - PROJECTS_DIR=/data/projects
+      - PACKAGES_DIR=/packages
+      - LOCAL_PACKAGES_DIR=/local-packages
+      - PROJECTS_DIR=/projects
       - OPENCODE_CONFIG_PATH=/config/opencode.json
       - OPENCODE_URL=http://opencode:4096
     depends_on:
@@ -93,19 +96,29 @@ docker logout ghcr.io
 
 ## Volume Mounts
 
-kinetic-context requires two volume mounts:
+kinetic-context requires multiple volume mounts:
 
-### Data Volume (`/data`)
+### Data Volumes
 
 Contains package repositories and project configurations:
 
+**Packages Volume (`/packages`):**
 ```
-/data
-├── packages/
-│   ├── package-name/          # Cloned git repository
-│   └── package-name.json      # Package configuration
-└── projects/
-    └── project-name.json      # Project configuration
+/packages
+├── package-name/          # Cloned git repository
+└── package-name.json      # Package configuration
+```
+
+**Local Packages Volume (`/local-packages`):**
+```
+/local-packages
+└── package-name/          # Local package repositories
+```
+
+**Projects Volume (`/projects`):**
+```
+/projects
+└── project-name.json      # Project configuration
 ```
 
 ### Config Volume (`/config`)
@@ -115,6 +128,15 @@ Contains the OpenCode configuration:
 ```
 /config
 └── opencode.json              # OpenCode AI configuration
+```
+
+### State Volume (`/state`)
+
+Contains OpenCode state (persists across restarts):
+
+```
+/state
+└── opencode/                  # OpenCode state directory
 ```
 
 ## Port Mappings
@@ -142,10 +164,10 @@ If you prefer `docker run` instead of Docker Compose:
 docker run -d \
   --name opencode \
   -p 7168:4096 \
-  -v ~/.kctx/config:/config \
-  -v ~/.kctx/data:/data \
+  -v ~/.kctx/opencode/config:/config \
+  -v ~/.kctx/opencode/state:/state \
   -e OPENCODE_CONFIG=/config/opencode.json \
-  -e XDG_STATE_HOME=/config/.local \
+  -e XDG_STATE_HOME=/state \
   ghcr.io/anomalyco/opencode:latest \
   serve --hostname=0.0.0.0
 
@@ -153,12 +175,15 @@ docker run -d \
 docker run -d \
   --name kinetic-context \
   -p 7167:3000 \
-  -v ~/.kctx/data:/data \
-  -v ~/.kctx/config:/config \
+  -v ~/.kctx/packages:/packages \
+  -v ~/.kctx/local-packages:/local-packages \
+  -v ~/.kctx/projects:/projects \
+  -v ~/.kctx/opencode/config:/config \
   -e CORS_ORIGIN=http://localhost:7167 \
   -e NODE_ENV=production \
-  -e PACKAGES_DIR=/data/packages \
-  -e PROJECTS_DIR=/data/projects \
+  -e PACKAGES_DIR=/packages \
+  -e LOCAL_PACKAGES_DIR=/local-packages \
+  -e PROJECTS_DIR=/projects \
   -e OPENCODE_CONFIG_PATH=/config/opencode.json \
   -e OPENCODE_URL=http://localhost:7168 \
   --link opencode:opencode \

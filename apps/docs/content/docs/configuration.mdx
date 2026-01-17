@@ -11,7 +11,7 @@ kinetic-context uses JSON configuration files to manage OpenCode settings, packa
 
 The OpenCode configuration file controls which AI model and provider to use for answering questions about dependencies.
 
-**Location**: `~/.kctx/config/opencode.json` (or `/config/opencode.json` in Docker)
+**Location**: `~/.kctx/opencode/config/opencode.json` (or `/config/opencode.json` in Docker)
 
 ### OpenRouter Example
 
@@ -73,19 +73,19 @@ To authenticate with GitHub Copilot, you need to connect to the local OpenCode i
    - Complete the OAuth authentication process
 
 4. **Verify authentication**:
-   - Once authenticated, your GitHub Copilot credentials will be stored in the container's state directory (`/config/.local/share/opencode`)
-   - The authentication persists across container restarts because it's stored in the mounted config volume
+   - Once authenticated, your GitHub Copilot credentials will be stored in the container's state directory (`/state/opencode`)
+   - The authentication persists across container restarts because it's stored in the mounted state volume
 
 5. **Configure your opencode.json**:
-   After authenticating, you can configure GitHub Copilot in your `~/.kctx/config/opencode.json` file. See the [OpenCode GitHub Copilot documentation](https://opencode.ai/docs/providers) for the exact configuration format.
+   After authenticating, you can configure GitHub Copilot in your `~/.kctx/opencode/config/opencode.json` file. See the [OpenCode GitHub Copilot documentation](https://opencode.ai/docs/providers) for the exact configuration format.
 
-The authentication state is stored separately from your regular OpenCode instance (if you have one installed locally) thanks to the `XDG_STATE_HOME=/config/.local` environment variable, which ensures the containerized OpenCode instance uses its own state directory.
+The authentication state is stored separately from your regular OpenCode instance (if you have one installed locally) thanks to the `XDG_STATE_HOME=/state` environment variable, which ensures the containerized OpenCode instance uses its own state directory.
 
 ## Package Configuration
 
 Package configuration files define which dependencies are available for querying.
 
-**Location**: `~/.kctx/data/packages/` (or `/data/packages/` in Docker)
+**Location**: `~/.kctx/packages/` (or `/packages/` in Docker)
 
 ### Package Config Format
 
@@ -121,7 +121,7 @@ Each package needs a JSON configuration file. The filename should match the pack
 
 ### Adding a Package
 
-1. Create a JSON file in `~/.kctx/data/packages/` with the package identifier as the filename
+1. Create a JSON file in `~/.kctx/packages/` with the package identifier as the filename
 2. Fill in the configuration with the package details
 3. The repository will be cloned automatically when first queried
 
@@ -130,7 +130,7 @@ Each package needs a JSON configuration file. The filename should match the pack
 After a package is cloned, the structure looks like:
 
 ```
-/data/packages/
+/packages/
 ├── @hookform/
 │   └── resolvers/          # Cloned git repository
 ├── @hookform/
@@ -139,11 +139,15 @@ After a package is cloned, the structure looks like:
     └── zod.json            # Package configuration
 ```
 
+### Local Packages
+
+Local packages are stored in a separate directory (`/local-packages/` or `~/.kctx/local-packages/`). These are typically used for packages that are discovered via project scanning or packages that don't come from external git repositories.
+
 ## Project Configuration
 
 Project configuration files define which dependencies are associated with a project and which versions/tags to use.
 
-**Location**: `~/.kctx/data/projects/` (or `/data/projects/` in Docker)
+**Location**: `~/.kctx/projects/` (or `/projects/` in Docker)
 
 ### Project Config Format
 
@@ -186,7 +190,7 @@ Each project needs a JSON configuration file. The filename should match the proj
 
 ### Creating a Project
 
-1. Create a JSON file in `~/.kctx/data/projects/` with your project identifier as the filename
+1. Create a JSON file in `~/.kctx/projects/` with your project identifier as the filename
 2. Add the project details and list of dependencies
 3. Each dependency can specify a specific tag/version, or use the package's default
 
@@ -232,8 +236,9 @@ You can also configure kinetic-context using environment variables in your `comp
 
 - **`CORS_ORIGIN`**: CORS origin URL (default: `http://localhost:7167`)
 - **`NODE_ENV`**: Environment mode (default: `production`)
-- **`PACKAGES_DIR`**: Path to packages directory (default: `/data/packages`)
-- **`PROJECTS_DIR`**: Path to projects directory (default: `/data/projects`)
+- **`PACKAGES_DIR`**: Path to packages directory (default: `/packages`)
+- **`LOCAL_PACKAGES_DIR`**: Path to local packages directory (default: `/local-packages`)
+- **`PROJECTS_DIR`**: Path to projects directory (default: `/projects`)
 - **`OPENCODE_CONFIG_PATH`**: Path to opencode.json (default: `/config/opencode.json`)
 - **`OPENCODE_URL`**: OpenCode service URL (default: `http://opencode:4096`)
 

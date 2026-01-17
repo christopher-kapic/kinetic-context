@@ -10,7 +10,7 @@ import {
   deletePackageConfig,
   type PackageConfig,
 } from "../../../../apps/server/src/utils/config";
-import { ensureRepoCloned, ensureRepoAvailable, checkoutTag, getRepoIdentifierFromUrl } from "../../../../apps/server/src/utils/git";
+import { ensureRepoCloned, ensureRepoAvailable, checkoutTag, getRepoIdentifierFromUrl, discoverGitRepositories } from "../../../../apps/server/src/utils/git";
 import { join } from "node:path";
 import { queryOpencodeStream, type OpencodeModel } from "../../../../apps/server/src/utils/opencode";
 import { readOpencodeConfig } from "../../../../apps/server/src/utils/config";
@@ -25,8 +25,8 @@ const CreatePackageInputSchema = z.object({
   identifier: z.string().min(1),
   package_manager: z.string(), // Can be empty
   display_name: z.string().min(1),
-  storage_type: z.enum(["cloned", "existing"]),
-  repo_path: z.string().optional(), // Only required for existing repos, calculated for cloned
+  storage_type: z.enum(["cloned", "local", "existing"]),
+  repo_path: z.string().optional(), // Required for local/existing repos, calculated for cloned
   default_tag: z.string().optional(), // Only for cloned repos, can be "auto" or a specific branch/tag
   urls: z.object({
     website: z.string().optional(),
@@ -44,11 +44,11 @@ const CreatePackageInputSchema = z.object({
       path: ["urls", "git"],
     });
   }
-  // If existing, repo_path is required
-  if (data.storage_type === "existing" && !data.repo_path) {
+  // If local or existing, repo_path is required
+  if ((data.storage_type === "local" || data.storage_type === "existing") && !data.repo_path) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Repository path is required for existing repositories",
+      message: "Repository path is required for local/existing repositories",
       path: ["repo_path"],
     });
   }
@@ -56,10 +56,10 @@ const CreatePackageInputSchema = z.object({
 
 const UpdatePackageInputSchema = z.object({
   identifier: z.string().min(1),
-  package_manager: z.string().min(1).optional(),
+  package_manager: z.string().optional(),
   display_name: z.string().min(1).optional(),
-  storage_type: z.enum(["cloned", "existing"]).optional(),
-  repo_path: z.string().min(1).optional(),
+  storage_type: z.enum(["cloned", "local", "existing"]).optional(),
+  repo_path: z.string().optional(),
   default_tag: z.string().optional(),
   urls: z
     .object({
@@ -71,6 +71,33 @@ const UpdatePackageInputSchema = z.object({
     })
     .optional(),
 });
+
+// Helper function to get the correct packages directory based on storage type
+function getPackagesDir(storageType: "cloned" | "local" | "existing"): string {
+  if (storageType === "cloned") {
+    return env.PACKAGES_DIR;
+  } else {
+    // local and existing both use LOCAL_PACKAGES_DIR
+    return env.LOCAL_PACKAGES_DIR;
+  }
+}
+
+// Helper function to find a package in either directory
+async function findPackageConfig(identifier: string): Promise<{ config: PackageConfig; dir: string } | null> {
+  // Try packages directory first (cloned repos)
+  let config = await readPackageConfig(env.PACKAGES_DIR, identifier, true);
+  if (config) {
+    return { config, dir: env.PACKAGES_DIR };
+  }
+  
+  // Try local packages directory (local/existing repos)
+  config = await readPackageConfig(env.LOCAL_PACKAGES_DIR, identifier, true);
+  if (config) {
+    return { config, dir: env.LOCAL_PACKAGES_DIR };
+  }
+  
+  return null;
+}
 
 // Async clone function for cloned repos
 async function cloneRepository(
@@ -126,8 +153,12 @@ async function cloneRepository(
 
 export const packagesRouter = {
   list: publicProcedure.handler(async () => {
-    const packages = await listPackageConfigs(env.PACKAGES_DIR);
-    return packages.map((pkg) => ({
+    // List packages from both directories
+    const clonedPackages = await listPackageConfigs(env.PACKAGES_DIR);
+    const localPackages = await listPackageConfigs(env.LOCAL_PACKAGES_DIR);
+    const allPackages = [...clonedPackages, ...localPackages];
+    
+    return allPackages.map((pkg) => ({
       ...pkg,
       cloneStatus: cloneStatus.get(pkg.identifier) ?? "completed",
     }));
@@ -136,24 +167,24 @@ export const packagesRouter = {
   get: publicProcedure
     .input(z.object({ identifier: z.string() }))
     .handler(async ({ input }) => {
-      const pkg = await readPackageConfig(env.PACKAGES_DIR, input.identifier);
-      if (!pkg) {
+      const found = await findPackageConfig(input.identifier);
+      if (!found) {
         throw new ORPCError({
           code: "NOT_FOUND",
           message: `Package with identifier "${input.identifier}" not found`,
         });
       }
       return {
-        ...pkg,
-        cloneStatus: cloneStatus.get(pkg.identifier) ?? "completed",
+        ...found.config,
+        cloneStatus: cloneStatus.get(found.config.identifier) ?? "completed",
       };
     }),
 
   create: publicProcedure
     .input(CreatePackageInputSchema)
     .handler(async ({ input }) => {
-      // Check if package already exists
-      const existing = await readPackageConfig(env.PACKAGES_DIR, input.identifier);
+      // Check if package already exists in either directory
+      const existing = await findPackageConfig(input.identifier);
       if (existing) {
         throw new ORPCError({
           code: "CONFLICT",
@@ -161,8 +192,10 @@ export const packagesRouter = {
         });
       }
 
-      // Determine repo_path based on storage_type
+      // Determine repo_path and packages directory based on storage_type
       let repoPath: string;
+      let packagesDir: string;
+      
       if (input.storage_type === "cloned") {
         // For cloned repos, use a normalized identifier based on the git URL
         // This allows multiple packages from the same repo to share the same clone
@@ -175,23 +208,34 @@ export const packagesRouter = {
         const repoIdentifier = getRepoIdentifierFromUrl(input.urls.git);
         // Use env.PACKAGES_DIR directly to match where ensureRepoCloned actually clones
         repoPath = join(env.PACKAGES_DIR, repoIdentifier);
+        packagesDir = env.PACKAGES_DIR;
       } else {
-        // For existing repos, use the provided path
+        // For local/existing repos, use the provided path
+        if (!input.repo_path) {
+          throw new ORPCError({
+            code: "BAD_REQUEST",
+            message: "Repository path is required for local/existing repositories",
+          });
+        }
         repoPath = input.repo_path;
+        packagesDir = env.LOCAL_PACKAGES_DIR;
       }
+
+      // Migrate 'existing' to 'local'
+      const storageType = input.storage_type === "existing" ? "local" : input.storage_type;
 
       const pkg: PackageConfig = {
         identifier: input.identifier,
         package_manager: input.package_manager,
         display_name: input.display_name,
-        storage_type: input.storage_type,
+        storage_type: storageType,
         repo_path: repoPath,
         default_tag: input.default_tag,
         urls: input.urls,
       };
 
-      // Write config file immediately
-      await writePackageConfig(env.PACKAGES_DIR, pkg);
+      // Write config file to the correct directory
+      await writePackageConfig(packagesDir, pkg);
 
       // Start async clone only for cloned repos (don't await)
       if (input.storage_type === "cloned" && input.urls.git) {
@@ -202,7 +246,7 @@ export const packagesRouter = {
           }
         );
       } else {
-        // For existing repos, mark as completed immediately
+        // For local/existing repos, mark as completed immediately
         cloneStatus.set(input.identifier, "completed");
       }
 
@@ -215,25 +259,43 @@ export const packagesRouter = {
   update: publicProcedure
     .input(UpdatePackageInputSchema)
     .handler(async ({ input }) => {
-      const existing = await readPackageConfig(env.PACKAGES_DIR, input.identifier);
-      if (!existing) {
+      const found = await findPackageConfig(input.identifier);
+      if (!found) {
         throw new ORPCError({
           code: "NOT_FOUND",
           message: `Package with identifier "${input.identifier}" not found`,
         });
       }
 
+      const existing = found.config;
+      const currentDir = found.dir;
+
+      // Determine new storage type (migrate 'existing' to 'local')
+      let newStorageType = input.storage_type ?? existing.storage_type;
+      if (newStorageType === "existing") {
+        newStorageType = "local";
+      }
+
+      // Determine if we need to move the package to a different directory
+      const newDir = getPackagesDir(newStorageType);
+      const needsMove = currentDir !== newDir;
+
       const updated: PackageConfig = {
         ...existing,
         package_manager: input.package_manager ?? existing.package_manager,
         display_name: input.display_name ?? existing.display_name,
-        storage_type: input.storage_type ?? existing.storage_type,
+        storage_type: newStorageType,
         repo_path: input.repo_path ?? existing.repo_path,
         default_tag: input.default_tag ?? existing.default_tag,
         urls: input.urls ? { ...existing.urls, ...input.urls } : existing.urls,
       };
 
-      await writePackageConfig(env.PACKAGES_DIR, updated);
+      // If storage type changed, delete from old location and write to new location
+      if (needsMove) {
+        await deletePackageConfig(currentDir, input.identifier);
+      }
+
+      await writePackageConfig(newDir, updated);
       return {
         ...updated,
         cloneStatus: cloneStatus.get(updated.identifier) ?? "completed",
@@ -243,15 +305,15 @@ export const packagesRouter = {
   delete: publicProcedure
     .input(z.object({ identifier: z.string() }))
     .handler(async ({ input }) => {
-      const existing = await readPackageConfig(env.PACKAGES_DIR, input.identifier);
-      if (!existing) {
+      const found = await findPackageConfig(input.identifier);
+      if (!found) {
         throw new ORPCError({
           code: "NOT_FOUND",
           message: `Package with identifier "${input.identifier}" not found`,
         });
       }
 
-      await deletePackageConfig(env.PACKAGES_DIR, input.identifier);
+      await deletePackageConfig(found.dir, input.identifier);
       cloneStatus.delete(input.identifier);
       return { success: true };
     }),
@@ -292,7 +354,35 @@ export const packagesRouter = {
       }
     }
     
-    return models;
+      return models;
+  }),
+
+  scanProjects: publicProcedure.query(async () => {
+    // Recursively scan projects directory for git repositories
+    const discoveredRepos = await discoverGitRepositories(env.PROJECTS_DIR);
+    
+    // For each discovered repo, create a suggested package config
+    const suggestions = await Promise.all(
+      discoveredRepos.map(async (repo) => {
+        // Extract a suggested identifier from the path
+        const pathParts = repo.relativePath.split("/").filter(p => p.length > 0);
+        const suggestedIdentifier = pathParts.length > 0 
+          ? pathParts[pathParts.length - 1] 
+          : `repo-${Date.now()}`;
+        
+        // Check if a package with this identifier already exists
+        const existing = await findPackageConfig(suggestedIdentifier);
+        
+        return {
+          path: repo.path,
+          relativePath: repo.relativePath,
+          suggestedIdentifier,
+          alreadyExists: !!existing,
+        };
+      })
+    );
+    
+    return suggestions;
   }),
 
   chat: publicProcedure
@@ -314,21 +404,24 @@ export const packagesRouter = {
       ),
     )
     .handler(async function* ({ input }) {
-      // Get package config
-      const pkg = await readPackageConfig(env.PACKAGES_DIR, input.identifier);
-      if (!pkg) {
+      // Get package config from either directory
+      const found = await findPackageConfig(input.identifier);
+      if (!found) {
         throw new ORPCError({
           code: "NOT_FOUND",
           message: `Package with identifier "${input.identifier}" not found`,
         });
       }
 
-      // Ensure repo is available (cloned or existing)
+      const pkg = found.config;
+
+      // Ensure repo is available (cloned or local)
+      const packagesDir = getPackagesDir(pkg.storage_type);
       const repoPath = await ensureRepoAvailable(
         pkg.repo_path,
         pkg.storage_type,
         pkg.urls.git,
-        env.PACKAGES_DIR,
+        packagesDir,
       );
 
       // Only checkout tag for cloned repos

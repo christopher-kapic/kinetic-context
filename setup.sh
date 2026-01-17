@@ -12,8 +12,11 @@ NC='\033[0m' # No Color
 # Configuration
 KCTX_HOME="$HOME/.kctx"
 BIN_DIR="$KCTX_HOME/bin"
-CONFIG_DIR="$KCTX_HOME/config"
-DATA_DIR="$KCTX_HOME/data"
+OPencode_CONFIG_DIR="$KCTX_HOME/opencode/config"
+OPencode_STATE_DIR="$KCTX_HOME/opencode/state"
+PACKAGES_DIR="$KCTX_HOME/packages"
+PROJECTS_DIR="$KCTX_HOME/projects"
+LOCAL_PACKAGES_DIR="$KCTX_HOME/local-packages"
 COMPOSE_FILE="$KCTX_HOME/compose.yaml"
 KCTX_SCRIPT="$BIN_DIR/kctx"
 
@@ -25,26 +28,54 @@ echo ""
 # Create directory structure
 echo -e "${GREEN}Creating directory structure...${NC}"
 mkdir -p "$BIN_DIR"
-mkdir -p "$CONFIG_DIR"
-mkdir -p "$DATA_DIR/packages"
-mkdir -p "$DATA_DIR/projects"
+mkdir -p "$OPencode_CONFIG_DIR"
+mkdir -p "$OPencode_STATE_DIR"
+mkdir -p "$PACKAGES_DIR"
+mkdir -p "$PROJECTS_DIR"
+mkdir -p "$LOCAL_PACKAGES_DIR"
 
-# Prompt for data directory
+# Prompt for packages directory
 echo ""
-echo -e "${YELLOW}Where would you like to store your data?${NC}"
-echo -e "  (This includes packages and projects)"
-read -p "  Default [$DATA_DIR]: " USER_DATA_DIR
-USER_DATA_DIR="${USER_DATA_DIR:-$DATA_DIR}"
+echo -e "${YELLOW}Where would you like to store your open-source packages?${NC}"
+echo -e "  (Packages cloned from git repositories)"
+read -p "  Default [$PACKAGES_DIR]: " USER_PACKAGES_DIR
+USER_PACKAGES_DIR="${USER_PACKAGES_DIR:-$PACKAGES_DIR}"
 
 # Expand tilde and resolve to absolute path
-USER_DATA_DIR="${USER_DATA_DIR/#\~/$HOME}"
-USER_DATA_DIR=$(cd "$(dirname "$USER_DATA_DIR")" && pwd)/$(basename "$USER_DATA_DIR")
+USER_PACKAGES_DIR="${USER_PACKAGES_DIR/#\~/$HOME}"
+USER_PACKAGES_DIR=$(cd "$(dirname "$USER_PACKAGES_DIR")" && pwd)/$(basename "$USER_PACKAGES_DIR")
 
-# Create user-specified data directory if it doesn't exist
-if [ ! -d "$USER_DATA_DIR" ]; then
-  echo -e "${GREEN}Creating data directory: $USER_DATA_DIR${NC}"
-  mkdir -p "$USER_DATA_DIR/packages"
-  mkdir -p "$USER_DATA_DIR/projects"
+# Create user-specified packages directory if it doesn't exist
+if [ ! -d "$USER_PACKAGES_DIR" ]; then
+  echo -e "${GREEN}Creating packages directory: $USER_PACKAGES_DIR${NC}"
+  mkdir -p "$USER_PACKAGES_DIR"
+fi
+
+# Prompt for projects directory
+echo ""
+echo -e "${YELLOW}Where would you like to store your projects?${NC}"
+echo -e "  (Project configurations and local git repositories)"
+read -p "  Default [$PROJECTS_DIR]: " USER_PROJECTS_DIR
+USER_PROJECTS_DIR="${USER_PROJECTS_DIR:-$PROJECTS_DIR}"
+
+# Expand tilde and resolve to absolute path
+USER_PROJECTS_DIR="${USER_PROJECTS_DIR/#\~/$HOME}"
+USER_PROJECTS_DIR=$(cd "$(dirname "$USER_PROJECTS_DIR")" && pwd)/$(basename "$USER_PROJECTS_DIR")
+
+# Create user-specified projects directory if it doesn't exist
+if [ ! -d "$USER_PROJECTS_DIR" ]; then
+  echo -e "${GREEN}Creating projects directory: $USER_PROJECTS_DIR${NC}"
+  mkdir -p "$USER_PROJECTS_DIR"
+fi
+
+# Determine local packages directory (default to same parent as packages)
+LOCAL_PACKAGES_PARENT=$(dirname "$USER_PACKAGES_DIR")
+USER_LOCAL_PACKAGES_DIR="$LOCAL_PACKAGES_PARENT/local-packages"
+
+# Create local packages directory if it doesn't exist
+if [ ! -d "$USER_LOCAL_PACKAGES_DIR" ]; then
+  echo -e "${GREEN}Creating local packages directory: $USER_LOCAL_PACKAGES_DIR${NC}"
+  mkdir -p "$USER_LOCAL_PACKAGES_DIR"
 fi
 
 # Create compose.yaml
@@ -58,12 +89,12 @@ services:
     ports:
       - "7168:4096"  # Map host port 7168 to container port 4096 (default opencode port)
     volumes:
-      - $CONFIG_DIR:/config
-      - $USER_DATA_DIR:/data
+      - $OPencode_CONFIG_DIR:/config
+      - $OPencode_STATE_DIR:/state
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
-      - XDG_STATE_HOME=/config/.local # separate .local/share/opencode from regular opencode instance
+      - XDG_STATE_HOME=/state
     restart: unless-stopped
 
   kinetic-context:
@@ -71,14 +102,18 @@ services:
     ports:
       - "7167:3000"
     volumes:
-      - $USER_DATA_DIR:/data
-      - $CONFIG_DIR:/config
+      - $USER_PACKAGES_DIR:/packages
+      - $USER_LOCAL_PACKAGES_DIR:/local-packages
+      - $USER_PROJECTS_DIR:/projects
+      - $OPencode_CONFIG_DIR:/config
     environment:
       - CORS_ORIGIN=http://localhost:7167
       - NODE_ENV=production
-      - PACKAGES_DIR=/data/packages
-      - PROJECTS_DIR=/data/projects
+      - PACKAGES_DIR=/packages
+      - LOCAL_PACKAGES_DIR=/local-packages
+      - PROJECTS_DIR=/projects
       - OPENCODE_CONFIG_PATH=/config/opencode.json
+      - OPENCODE_STATE_DIR=/state
       - OPENCODE_URL=http://opencode:4096
     depends_on:
       - opencode
@@ -236,5 +271,10 @@ echo -e "  ${BLUE}kctx logs${NC}     - Show logs"
 echo -e "  ${BLUE}kctx down${NC}     - Stop and remove containers"
 echo ""
 
-echo -e "${GREEN}Data Directory:${NC} ${BLUE}$USER_DATA_DIR${NC}"
+echo -e "${GREEN}Directory Configuration:${NC}"
+echo -e "  Packages: ${BLUE}$USER_PACKAGES_DIR${NC}"
+echo -e "  Local Packages: ${BLUE}$USER_LOCAL_PACKAGES_DIR${NC}"
+echo -e "  Projects: ${BLUE}$USER_PROJECTS_DIR${NC}"
+echo -e "  OpenCode Config: ${BLUE}$OPencode_CONFIG_DIR${NC}"
+echo -e "  OpenCode State: ${BLUE}$OPencode_STATE_DIR${NC}"
 echo ""

@@ -5,7 +5,8 @@ import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Loader2, MessageSquare } from "lucide-react";
+import { Loader2, MessageSquare, Edit } from "lucide-react";
+import { EditPackageDialog } from "@/components/dialogs/edit-package-dialog";
 
 export const Route = createFileRoute("/package/$identifier")({
   component: PackageDetailComponent,
@@ -60,15 +61,23 @@ function PackageDetailComponent() {
                   {pkg.data.identifier}
                 </p>
               </div>
-              <Link
-                to="/package/$identifier/chat"
-                params={{ identifier: pkg.data.identifier }}
-              >
-                <Button>
-                  <MessageSquare className="size-4 mr-2" />
-                  Chat
-                </Button>
-              </Link>
+              <div className="flex gap-2">
+                <EditPackageDialog identifier={pkg.data.identifier}>
+                  <Button variant="outline">
+                    <Edit className="size-4 mr-2" />
+                    Edit
+                  </Button>
+                </EditPackageDialog>
+                <Link
+                  to="/package/$identifier/chat"
+                  params={{ identifier: pkg.data.identifier }}
+                >
+                  <Button>
+                    <MessageSquare className="size-4 mr-2" />
+                    Chat
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -82,7 +91,11 @@ function PackageDetailComponent() {
                   <div className="text-sm font-medium mb-1">Storage Type</div>
                   <div>
                     <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary">
-                      {pkg.data.storage_type === "cloned" ? "Cloned Repository" : "Existing Repository"}
+                      {pkg.data.storage_type === "cloned" 
+                        ? "Cloned Repository" 
+                        : pkg.data.storage_type === "local" 
+                        ? "Local Repository" 
+                        : "Existing Repository"}
                     </span>
                   </div>
                 </div>

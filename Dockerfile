@@ -68,14 +68,16 @@ RUN corepack enable && corepack prepare pnpm@10.20.0 --activate
 # Install production dependencies
 RUN pnpm install --frozen-lockfile --prod
 
-# Create directories for volumes
-RUN mkdir -p /data/packages /data/projects /config
+# Create directories for volumes (will be overridden by volume mounts)
+RUN mkdir -p /packages /local-packages /projects /config /state
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PACKAGES_DIR=/data/packages
-ENV PROJECTS_DIR=/data/projects
+ENV PACKAGES_DIR=/packages
+ENV LOCAL_PACKAGES_DIR=/local-packages
+ENV PROJECTS_DIR=/projects
 ENV OPENCODE_CONFIG_PATH=/config/opencode.json
+ENV OPENCODE_STATE_DIR=/state
 
 # Expose port
 EXPOSE 3000

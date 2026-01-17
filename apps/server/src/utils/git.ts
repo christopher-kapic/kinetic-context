@@ -5,6 +5,8 @@ import simpleGit from "simple-git";
 
 /**
  * Normalize a git URL to create a consistent identifier for the repository.
+ * Uses format: [platform]/[userId]/[repo]
+ * Example: github.com/christopher-kapic/kinetic-context
  * This allows multiple packages from the same repo to share the same clone.
  */
 export function getRepoIdentifierFromUrl(gitUrl: string): string {
@@ -14,24 +16,40 @@ export function getRepoIdentifierFromUrl(gitUrl: string): string {
     .replace(/^git@/, "") // Remove git@
     .replace(/\.git$/, "") // Remove .git suffix
     .replace(/:/g, "/") // Replace : with / (for SSH URLs like git@github.com:user/repo)
-    .toLowerCase()
     .trim();
 
-  // Create a safe filesystem identifier
-  // Replace any problematic characters with underscores
-  const safeIdentifier = normalized
-    .replace(/[^a-z0-9\/._-]/g, "_")
-    .replace(/\/+/g, "/") // Collapse multiple slashes
-    .replace(/^\/+/, "") // Remove leading slashes
-    .replace(/\/+$/, ""); // Remove trailing slashes
-
-  // If the identifier is too long or still problematic, use a hash
-  if (safeIdentifier.length > 200 || safeIdentifier.includes("..")) {
+  // Parse the URL to extract platform, userId, and repo
+  // Format should be: platform/userId/repo (and possibly more path segments)
+  const parts = normalized.split("/").filter(p => p.length > 0);
+  
+  if (parts.length < 3) {
+    // If we can't parse it properly, fall back to a hash
     const hash = createHash("sha256").update(gitUrl).digest("hex").substring(0, 16);
     return `repo_${hash}`;
   }
 
-  return safeIdentifier || `repo_${createHash("sha256").update(gitUrl).digest("hex").substring(0, 16)}`;
+  // Extract platform (e.g., github.com, gitlab.com)
+  const platform = parts[0].toLowerCase();
+  // Extract userId (e.g., christopher-kapic, user)
+  const userId = parts[1].toLowerCase();
+  // Extract repo name (e.g., kinetic-context, project)
+  const repo = parts[2].toLowerCase();
+
+  // Create safe filesystem identifiers (replace problematic characters)
+  const safePlatform = platform.replace(/[^a-z0-9._-]/g, "_");
+  const safeUserId = userId.replace(/[^a-z0-9._-]/g, "_");
+  const safeRepo = repo.replace(/[^a-z0-9._-]/g, "_");
+
+  // Format as: platform/userId/repo
+  const identifier = `${safePlatform}/${safeUserId}/${safeRepo}`;
+
+  // If the identifier is too long or still problematic, use a hash
+  if (identifier.length > 200 || identifier.includes("..")) {
+    const hash = createHash("sha256").update(gitUrl).digest("hex").substring(0, 16);
+    return `repo_${hash}`;
+  }
+
+  return identifier;
 }
 
 /**
@@ -73,12 +91,12 @@ export async function ensureRepoCloned(
  */
 export async function ensureRepoAvailable(
   repoPath: string,
-  storageType: "cloned" | "existing",
+  storageType: "cloned" | "local" | "existing",
   gitUrl?: string,
   packagesDir?: string,
 ): Promise<string> {
-  if (storageType === "existing") {
-    // For existing repos, just verify the path exists
+  if (storageType === "local" || storageType === "existing") {
+    // For local/existing repos, just verify the path exists
     if (!existsSync(repoPath)) {
       throw new Error(
         `Repository path does not exist: ${repoPath}. Please verify the path is correct.`,
@@ -174,4 +192,90 @@ export async function getDefaultBranch(repoPath: string): Promise<string> {
   }
   // Fallback to "main"
   return "main";
+}
+
+/**
+ * Recursively scan a directory for git repositories.
+ * Returns an array of discovered repository paths.
+ */
+export async function discoverGitRepositories(
+  rootDir: string,
+  maxDepth: number = 10,
+): Promise<Array<{ path: string; relativePath: string }>> {
+  const repositories: Array<{ path: string; relativePath: string }> = [];
+  const { readdir, stat, access } = await import("node:fs/promises");
+  const { constants } = await import("node:fs");
+
+  async function isGitRepository(dir: string): Promise<boolean> {
+    try {
+      const gitPath = join(dir, ".git");
+      await access(gitPath, constants.F_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function scanDirectory(
+    dir: string,
+    relativePath: string = "",
+    depth: number = 0,
+  ): Promise<void> {
+    if (depth > maxDepth) {
+      return;
+    }
+
+    try {
+      const entries = await readdir(dir);
+
+      for (const entry of entries) {
+        const fullPath = join(dir, entry);
+        const newRelativePath = relativePath
+          ? join(relativePath, entry)
+          : entry;
+
+        try {
+          const stats = await stat(fullPath);
+
+          if (stats.isDirectory()) {
+            // Check if this directory is a git repository
+            if (await isGitRepository(fullPath)) {
+              repositories.push({
+                path: fullPath,
+                relativePath: newRelativePath,
+              });
+              // Don't scan inside git repos (they might have submodules, but we skip those)
+              continue;
+            }
+
+            // Skip common directories that shouldn't be scanned
+            if (
+              entry === "node_modules" ||
+              entry === ".git" ||
+              entry === "vendor" ||
+              entry === "target" ||
+              entry === "dist" ||
+              entry === "build" ||
+              entry === ".next" ||
+              entry === ".cache"
+            ) {
+              continue;
+            }
+
+            // Recursively scan subdirectories
+            await scanDirectory(fullPath, newRelativePath, depth + 1);
+          }
+        } catch (error) {
+          // Skip directories we can't access
+          continue;
+        }
+      }
+    } catch (error) {
+      // Skip directories we can't read
+      return;
+    }
+  }
+
+  await scanDirectory(rootDir);
+  return repositories;
 }

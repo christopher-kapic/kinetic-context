@@ -31,11 +31,13 @@ CORS_ORIGIN=http://localhost:3000
 NODE_ENV=development
 
 # Data Directories (for local development)
-PACKAGES_DIR=./data/packages
-PROJECTS_DIR=./data/projects
+PACKAGES_DIR=./packages
+LOCAL_PACKAGES_DIR=./local-packages
+PROJECTS_DIR=./projects
 
 # OpenCode Configuration
 OPENCODE_CONFIG_PATH=./config/opencode.json
+OPENCODE_STATE_DIR=./state
 OPENCODE_URL=http://localhost:7168  # URL of your opencode instance (default: http://opencode:4096 for Docker)
 ```
 
@@ -50,7 +52,7 @@ pnpm install
 Create the necessary directories:
 
 ```bash
-mkdir -p data/packages data/projects config
+mkdir -p packages local-packages projects config state
 ```
 
 Create an `opencode.json` config file in the `config` directory (see [OpenCode Configuration](#opencode-configuration) below).
@@ -113,7 +115,7 @@ OpenCode is used to answer questions about dependencies. Create a `config/openco
 
 You can configure any provider supported by OpenCode. See the [OpenCode documentation](https://opencode.ai/docs/providers) for more details.
 
-**Note:** In production (Docker), the config file should be mounted as a volume at `/config/opencode.json`.
+**Note:** In production (Docker), the config file should be mounted as a volume at `/config/opencode.json`, and the state directory should be mounted at `/state` for persistence.
 
 ## Documentation
 
@@ -160,22 +162,35 @@ docker build -t kinetic-context .
 
 ### Running with Docker
 
-kinetic-context requires two services: **opencode** and **kinetic-context**. The Docker setup requires two volumes:
+kinetic-context requires two services: **opencode** and **kinetic-context**. The Docker setup requires separate volumes for better organization:
 
-1. **Data volume** - Contains `/packages` and `/projects` subdirectories
-2. **Config volume** - Contains `opencode.json` configuration file
+1. **Packages volume** - Contains cloned open-source packages (format: `[platform]/[userId]/[repo]`)
+2. **Local packages volume** - Contains local/proprietary package configurations
+3. **Projects volume** - Contains project configurations and local git repositories
+4. **OpenCode config volume** - Contains `opencode.json` configuration file
+5. **OpenCode state volume** - Contains OpenCode state (persists across restarts)
 
-Example directory structure for the data volume:
+Example directory structure:
 
 ```
-/data
-  /packages
-    /example-dependency-1  # git repo
-    example-dependency-1.json  # config
-    /example-dependency-2
-    example-dependency-2.json
-  /projects
-    my-project.json
+/packages (open-source packages)
+  /github.com
+    /user
+      /repo-name/  # cloned git repo
+  /package-identifier.json  # package config
+
+/local-packages (local/proprietary packages)
+  /package-identifier.json  # package config
+
+/projects
+  /project-identifier.json  # project config
+  /nested-git-repos/  # discovered via scan
+
+/config (opencode config)
+  /opencode.json
+
+/state (opencode state)
+  /.local/state/opencode/
 ```
 
 **Important:** Before running, you must authenticate to GitHub Container Registry to pull the opencode image:
@@ -206,11 +221,11 @@ services:
       - "7168:4096"
     volumes:
       - ./config:/config
-      - ./data:/data
+      - ./state:/state
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
-      - XDG_STATE_HOME=/config/.local # separate .local/share/opencode from regular opencode instance
+      - XDG_STATE_HOME=/state
     restart: unless-stopped
 
   kinetic-context:
@@ -218,14 +233,18 @@ services:
     ports:
       - "7167:3000"
     volumes:
-      - ./data:/data
+      - ./packages:/packages
+      - ./local-packages:/local-packages
+      - ./projects:/projects
       - ./config:/config
     environment:
       - CORS_ORIGIN=http://localhost:7167
       - NODE_ENV=production
-      - PACKAGES_DIR=/data/packages
-      - PROJECTS_DIR=/data/projects
+      - PACKAGES_DIR=/packages
+      - LOCAL_PACKAGES_DIR=/local-packages
+      - PROJECTS_DIR=/projects
       - OPENCODE_CONFIG_PATH=/config/opencode.json
+      - OPENCODE_STATE_DIR=/state
       - OPENCODE_URL=http://opencode:4096
     depends_on:
       - opencode
@@ -244,9 +263,11 @@ The following environment variables can be set for the kinetic-context service:
 
 - `CORS_ORIGIN` (required) - CORS origin URL
 - `NODE_ENV` (optional) - `development` or `production` (default: `development`)
-- `PACKAGES_DIR` (optional) - Path to packages directory (default: `/data/packages`)
-- `PROJECTS_DIR` (optional) - Path to projects directory (default: `/data/projects`)
+- `PACKAGES_DIR` (optional) - Path to open-source packages directory (default: `/packages`)
+- `LOCAL_PACKAGES_DIR` (optional) - Path to local/proprietary packages directory (default: `/local-packages`)
+- `PROJECTS_DIR` (optional) - Path to projects directory (default: `/projects`)
 - `OPENCODE_CONFIG_PATH` (optional) - Path to opencode.json config (default: `/config/opencode.json`)
+- `OPENCODE_STATE_DIR` (optional) - Path to OpenCode state directory (default: `/state`)
 - `OPENCODE_URL` (required in Docker) - URL of the opencode service (default: `http://opencode:4096` in Docker, or set to your local opencode instance URL for development)
 
 ## Available Scripts

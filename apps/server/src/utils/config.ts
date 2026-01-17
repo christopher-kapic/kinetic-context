@@ -22,7 +22,7 @@ const PackageConfigSchema = z.object({
   identifier: z.string(),
   package_manager: z.string(),
   display_name: z.string(),
-  storage_type: z.enum(["cloned", "existing"]),
+  storage_type: z.enum(["cloned", "local", "existing"]), // 'existing' is legacy, will be migrated to 'local'
   repo_path: z.string(), // Absolute path to git repo
   default_tag: z.string().optional(), // Only used for cloned repos
   urls: z.object({
@@ -69,7 +69,21 @@ export async function readPackageConfig(
     // Try new schema first
     const newSchemaResult = PackageConfigSchema.safeParse(parsed);
     if (newSchemaResult.success) {
-      return newSchemaResult.data;
+      let config = newSchemaResult.data;
+      
+      // Migrate 'existing' storage_type to 'local'
+      if (config.storage_type === "existing") {
+        console.log(`[config] Migrating 'existing' storage_type to 'local' for package: ${identifier}`);
+        config = {
+          ...config,
+          storage_type: "local" as const,
+        };
+        // Write migrated config back to disk
+        await writePackageConfig(packagesDir, config);
+        console.log(`[config] Successfully migrated package config: ${identifier}`);
+      }
+      
+      return config;
     }
     
     // Try legacy schema and migrate if found

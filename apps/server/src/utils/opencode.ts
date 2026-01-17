@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { env } from "@kinetic-context/env/server";
+import { logger } from "./logger.js";
 
 /**
  * Get the opencode server URL from environment variable.
@@ -8,7 +9,7 @@ import { env } from "@kinetic-context/env/server";
  */
 function getOpencodeUrl(): string {
   const url = env.OPENCODE_URL;
-  console.log(`[opencode] Using opencode URL: ${url}`);
+  logger.log("[opencode]", `Using opencode URL: ${url}`);
   return url;
 }
 
@@ -23,23 +24,23 @@ export async function* queryOpencodeStream(
   model?: OpencodeModel,
   sessionId?: string,
 ): AsyncGenerator<{ text: string; done: boolean; sessionId?: string }, void, unknown> {
-  console.log(`[opencode] Starting streaming query for directory: ${repoPath}`);
-  console.log(`[opencode] Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`);
+  logger.log("[opencode]", `Starting streaming query for directory: ${repoPath}`);
+  logger.log("[opencode]", `Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`);
   if (model) {
-    console.log(`[opencode] Using model: ${model.providerID}/${model.modelID}`);
+    logger.log("[opencode]", `Using model: ${model.providerID}/${model.modelID}`);
   }
   
   const opencodeUrl = getOpencodeUrl();
-  console.log(`[opencode] Server URL: ${opencodeUrl}`);
+  logger.log("[opencode]", `Server URL: ${opencodeUrl}`);
 
   // Create client with the repository directory
   let createOpencodeClient: any;
   try {
     const module = await import("@opencode-ai/sdk");
     createOpencodeClient = module.createOpencodeClient;
-    console.log("[opencode] Using client from @opencode-ai/sdk package");
+    logger.log("[opencode]", "Using client from @opencode-ai/sdk package");
   } catch (error) {
-    console.log("[opencode] Falling back to local context client");
+    logger.log("[opencode]", "Falling back to local context client");
     const opencodePath = join(
       process.cwd(),
       "context",
@@ -54,7 +55,7 @@ export async function* queryOpencodeStream(
     createOpencodeClient = module.createOpencodeClient;
   }
 
-  console.log(`[opencode] Creating client with baseUrl: ${opencodeUrl}, directory: ${repoPath}`);
+  logger.log("[opencode]", `Creating client with baseUrl: ${opencodeUrl}, directory: ${repoPath}`);
   const client = createOpencodeClient({
     baseUrl: opencodeUrl,
     directory: repoPath,
@@ -64,7 +65,7 @@ export async function* queryOpencodeStream(
   let currentSessionId = sessionId;
   if (!currentSessionId) {
     const sessionTitle = `Query: ${query.substring(0, 50)}`;
-    console.log(`[opencode] Creating session with title: ${sessionTitle}`);
+    logger.log("[opencode]", `Creating session with title: ${sessionTitle}`);
     const sessionResult = await client.session.create({
       body: { title: sessionTitle },
     });
@@ -73,16 +74,16 @@ export async function* queryOpencodeStream(
       const errorDetails = sessionResult.error 
         ? JSON.stringify(sessionResult.error, null, 2)
         : "No error object provided";
-      console.error(`[opencode] Session creation failed. Error details:`, errorDetails);
+      logger.error("[opencode]", `Session creation failed. Error details:`, errorDetails);
       throw new Error(
         `Failed to create opencode session: ${sessionResult.error?.message || JSON.stringify(sessionResult.error) || "Unknown error"}`,
       );
     }
 
     currentSessionId = sessionResult.data.id;
-    console.log(`[opencode] Session created successfully: ${currentSessionId}`);
+    logger.log("[opencode]", `Session created successfully: ${currentSessionId}`);
   } else {
-    console.log(`[opencode] Reusing existing session: ${currentSessionId}`);
+    logger.log("[opencode]", `Reusing existing session: ${currentSessionId}`);
   }
 
   try {
@@ -107,12 +108,12 @@ export async function* queryOpencodeStream(
       };
     }
 
-    console.log(`[opencode] Sending prompt message to session ${currentSessionId}`);
+    logger.log("[opencode]", `Sending prompt message to session ${currentSessionId}`);
     void client.session.prompt({
       path: { id: currentSessionId },
       body: promptBody,
     }).catch((error: any) => {
-      console.error(`[opencode] Prompt send error:`, error);
+      logger.error("[opencode]", `Prompt send error:`, error);
     });
 
     // Process events and yield text chunks
@@ -132,7 +133,7 @@ export async function* queryOpencodeStream(
         ) {
           assistantMessageId = messageInfo.id;
           waitingForAssistant = false;
-          console.log(`[opencode] Found assistant message: ${assistantMessageId}`);
+          logger.log("[opencode]", `Found assistant message: ${assistantMessageId}`);
         }
       }
 
@@ -149,7 +150,7 @@ export async function* queryOpencodeStream(
             if (part.messageInfo.role === "assistant") {
               assistantMessageId = part.messageID;
               waitingForAssistant = false;
-              console.log(`[opencode] Found assistant message from part: ${assistantMessageId}`);
+              logger.log("[opencode]", `Found assistant message from part: ${assistantMessageId}`);
             } else if (part.messageInfo.role === "user") {
               // Skip user message parts
               continue;
@@ -210,9 +211,9 @@ export async function* queryOpencodeStream(
       yield { text: "", done: true, sessionId: currentSessionId };
     }
   } catch (error) {
-    console.error(`[opencode] Error in queryOpencodeStream:`, error instanceof Error ? error.message : String(error));
+    logger.error("[opencode]", `Error in queryOpencodeStream:`, error instanceof Error ? error.message : String(error));
     if (error instanceof Error && error.stack) {
-      console.error(`[opencode] Error stack:`, error.stack);
+      logger.error("[opencode]", `Error stack:`, error.stack);
     }
     throw error;
   }
@@ -223,11 +224,11 @@ export async function queryOpencode(
   query: string,
   sessionId?: string,
 ): Promise<{ response: string; sessionId: string }> {
-  console.log(`[opencode] Starting query for directory: ${repoPath}`);
-  console.log(`[opencode] Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`);
+  logger.log("[opencode]", `Starting query for directory: ${repoPath}`);
+  logger.log("[opencode]", `Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`);
   
   const opencodeUrl = getOpencodeUrl();
-  console.log(`[opencode] Server URL: ${opencodeUrl}`);
+  logger.log("[opencode]", `Server URL: ${opencodeUrl}`);
 
   // Create client with the repository directory
   // Try to use installed package first (for production/Docker)
@@ -235,9 +236,9 @@ export async function queryOpencode(
   try {
     const module = await import("@opencode-ai/sdk");
     createOpencodeClient = module.createOpencodeClient;
-    console.log("[opencode] Using client from @opencode-ai/sdk package");
+    logger.log("[opencode]", "Using client from @opencode-ai/sdk package");
   } catch (error) {
-    console.log("[opencode] Falling back to local context client");
+    logger.log("[opencode]", "Falling back to local context client");
     // Fallback: try to use local opencode from context directory (for development)
     const opencodePath = join(
       process.cwd(),
@@ -253,7 +254,7 @@ export async function queryOpencode(
     createOpencodeClient = module.createOpencodeClient;
   }
 
-  console.log(`[opencode] Creating client with baseUrl: ${opencodeUrl}, directory: ${repoPath}`);
+  logger.log("[opencode]", `Creating client with baseUrl: ${opencodeUrl}, directory: ${repoPath}`);
   const client = createOpencodeClient({
     baseUrl: opencodeUrl,
     directory: repoPath,
@@ -263,53 +264,78 @@ export async function queryOpencode(
   let currentSessionId = sessionId;
   if (!currentSessionId) {
     const sessionTitle = `Query: ${query.substring(0, 50)}`;
-    console.log(`[opencode] Creating session with title: ${sessionTitle}`);
-    const sessionResult = await client.session.create({
-      body: { title: sessionTitle },
-    });
+    logger.log("[opencode]", `Creating session with title: ${sessionTitle}`);
+    try {
+      const sessionResult = await client.session.create({
+        body: { title: sessionTitle },
+      });
 
-    console.log(`[opencode] Session create result:`, {
-      hasError: !!sessionResult.error,
-      hasData: !!sessionResult.data,
-      error: sessionResult.error ? JSON.stringify(sessionResult.error, null, 2) : null,
-      dataId: sessionResult.data?.id,
-    });
+      logger.log("[opencode]", `Session create result:`, {
+        hasError: !!sessionResult.error,
+        hasData: !!sessionResult.data,
+        error: sessionResult.error ? JSON.stringify(sessionResult.error, null, 2) : null,
+        dataId: sessionResult.data?.id,
+      });
 
-    if (sessionResult.error || !sessionResult.data) {
-      const errorDetails = sessionResult.error 
-        ? JSON.stringify(sessionResult.error, null, 2)
-        : "No error object provided";
-      console.error(`[opencode] Session creation failed. Error details:`, errorDetails);
-      console.error(`[opencode] Full session result:`, JSON.stringify(sessionResult, null, 2));
+      if (sessionResult.error || !sessionResult.data) {
+        const errorDetails = sessionResult.error 
+          ? JSON.stringify(sessionResult.error, null, 2)
+          : "No error object provided";
+        logger.error("[opencode]", `Session creation failed. Error details:`, errorDetails);
+        logger.error("[opencode]", `Full session result:`, JSON.stringify(sessionResult, null, 2));
+        throw new Error(
+          `Failed to create opencode session: ${sessionResult.error?.message || JSON.stringify(sessionResult.error) || "Unknown error"}`,
+        );
+      }
+
+      currentSessionId = sessionResult.data.id;
+      logger.log("[opencode]", `Session created successfully: ${currentSessionId}`);
+      logger.log("[opencode]", `Session ID type: ${typeof currentSessionId}, starts with 'ses': ${String(currentSessionId).startsWith('ses')}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error && error.stack ? error.stack : undefined;
+      logger.error("[opencode]", `Error during session creation (opencode URL: ${opencodeUrl}):`, errorMessage);
+      if (errorStack) {
+        logger.error("[opencode]", `Error stack:`, errorStack);
+      }
       throw new Error(
-        `Failed to create opencode session: ${sessionResult.error?.message || JSON.stringify(sessionResult.error) || "Unknown error"}`,
+        `Failed to create opencode session (opencode URL: ${opencodeUrl}): ${errorMessage}`,
       );
     }
-
-    currentSessionId = sessionResult.data.id;
-    console.log(`[opencode] Session created successfully: ${currentSessionId}`);
-    console.log(`[opencode] Session ID type: ${typeof currentSessionId}, starts with 'ses': ${String(currentSessionId).startsWith('ses')}`);
   } else {
-    console.log(`[opencode] Reusing existing session: ${currentSessionId}`);
+    logger.log("[opencode]", `Reusing existing session: ${currentSessionId}`);
   }
 
   try {
     // Use prompt to send the message (streaming endpoint)
-    console.log(`[opencode] Sending prompt message to session ${currentSessionId}`);
-    const promptResult = await client.session.prompt({
-      path: { id: currentSessionId },
-      body: {
-        parts: [
-          {
-            type: "text",
-            text: query,
-          },
-        ],
-      },
-    });
+    logger.log("[opencode]", `Sending prompt message to session ${currentSessionId}`);
+    let promptResult;
+    try {
+      promptResult = await client.session.prompt({
+        path: { id: currentSessionId },
+        body: {
+          parts: [
+            {
+              type: "text",
+              text: query,
+            },
+          ],
+        },
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error && error.stack ? error.stack : undefined;
+      logger.error("[opencode]", `Error during prompt send (opencode URL: ${opencodeUrl}, session: ${currentSessionId}):`, errorMessage);
+      if (errorStack) {
+        logger.error("[opencode]", `Error stack:`, errorStack);
+      }
+      throw new Error(
+        `Failed to send prompt to opencode (opencode URL: ${opencodeUrl}): ${errorMessage}`,
+      );
+    }
 
     // Log prompt result for debugging
-    console.log(`[opencode] Prompt result:`, {
+    logger.log("[opencode]", `Prompt result:`, {
       hasError: !!promptResult.error,
       hasData: !!promptResult.data,
       error: promptResult.error ? JSON.stringify(promptResult.error, null, 2) : null,
@@ -321,7 +347,7 @@ export async function queryOpencode(
 
     if (promptResult.error) {
       const errorDetails = JSON.stringify(promptResult.error, null, 2);
-      console.error(`[opencode] Prompt failed. Error details:`, errorDetails);
+      logger.error("[opencode]", `Prompt failed. Error details:`, errorDetails);
       throw new Error(
         `Failed to send prompt: ${promptResult.error?.message || JSON.stringify(promptResult.error) || "Unknown error"}`,
       );
@@ -338,14 +364,14 @@ export async function queryOpencode(
       if (textParts.length > 0) {
         const lastTextPart = textParts[textParts.length - 1];
         const responseText = lastTextPart.text;
-        console.log(`[opencode] Received immediate response (${responseText.length} characters)`);
+        logger.log("[opencode]", `Received immediate response (${responseText.length} characters)`);
         return { response: responseText, sessionId: currentSessionId };
       }
     }
 
     // If we didn't get a response immediately, wait for streaming to complete
     // then fetch messages using direct HTTP to bypass the SDK sessionID validation bug
-    console.log(`[opencode] No immediate response, waiting for streaming to complete...`);
+    logger.log("[opencode]", `No immediate response, waiting for streaming to complete...`);
     await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds for streaming
 
     // Use direct HTTP request to bypass SDK bug with sessionID validation
@@ -357,12 +383,25 @@ export async function queryOpencode(
       urlObj.searchParams.set('directory', encodedDir);
       const finalUrl = urlObj.toString();
       
-      console.log(`[opencode] Fetching messages via direct HTTP: ${finalUrl}`);
-      const response = await fetch(finalUrl, {
-        headers: {
-          'x-opencode-directory': repoPath, // Also set header for directory
-        },
-      });
+      logger.log("[opencode]", `Fetching messages via direct HTTP: ${finalUrl}`);
+      let response;
+      try {
+        response = await fetch(finalUrl, {
+          headers: {
+            'x-opencode-directory': repoPath, // Also set header for directory
+          },
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error && error.stack ? error.stack : undefined;
+        logger.error("[opencode]", `Error during HTTP fetch for messages (URL: ${finalUrl}):`, errorMessage);
+        if (errorStack) {
+          logger.error("[opencode]", `Error stack:`, errorStack);
+        }
+        throw new Error(
+          `Failed to fetch messages from opencode (URL: ${finalUrl}): ${errorMessage}`,
+        );
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -399,15 +438,20 @@ export async function queryOpencode(
 
       const lastTextPart = textParts[textParts.length - 1];
       const responseText = lastTextPart.text;
-      console.log(`[opencode] Received response from HTTP messages (${responseText.length} characters)`);
+      logger.log("[opencode]", `Received response from HTTP messages (${responseText.length} characters)`);
       return { response: responseText, sessionId: currentSessionId };
     } else {
       throw new Error(`Cannot fetch messages: no repository path available`);
     }
   } catch (error) {
-    console.error(`[opencode] Error in queryOpencode:`, error instanceof Error ? error.message : String(error));
-    if (error instanceof Error && error.stack) {
-      console.error(`[opencode] Error stack:`, error.stack);
+    // Only log if error wasn't already logged with context above
+    if (!(error instanceof Error && error.message.includes('opencode URL:'))) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error && error.stack ? error.stack : undefined;
+      logger.error("[opencode]", `Error in queryOpencode (opencode URL: ${opencodeUrl}):`, errorMessage);
+      if (errorStack) {
+        logger.error("[opencode]", `Error stack:`, errorStack);
+      }
     }
     throw error;
   }

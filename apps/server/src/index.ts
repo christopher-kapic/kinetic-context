@@ -16,6 +16,7 @@ import { createMcpServer } from "./mcp/index.js";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { logger as appLogger } from "./utils/logger.js";
 
 const app = new Hono();
 
@@ -36,7 +37,7 @@ export const apiHandler = new OpenAPIHandler(appRouter, {
   ],
   interceptors: [
     onError((error) => {
-      console.error(error);
+      appLogger.error("[server]", error);
     }),
   ],
 });
@@ -44,7 +45,7 @@ export const apiHandler = new OpenAPIHandler(appRouter, {
 export const rpcHandler = new RPCHandler(appRouter, {
   interceptors: [
     onError((error) => {
-      console.error(error);
+      appLogger.error("[server]", error);
     }),
   ],
 });
@@ -172,6 +173,6 @@ serve(
     port: 3000,
   },
   (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
+    appLogger.log("[server]", `Server is running on http://localhost:${info.port}`);
   },
 );

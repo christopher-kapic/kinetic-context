@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir, unlink } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { z } from "zod";
 import { getRepoIdentifierFromUrl } from "./git";
+import { logger } from "./logger.js";
 
 // Legacy package config schema (before storage_type and repo_path were added)
 const LegacyPackageConfigSchema = z.object({
@@ -73,14 +74,14 @@ export async function readPackageConfig(
       
       // Migrate 'existing' storage_type to 'local'
       if (config.storage_type === "existing") {
-        console.log(`[config] Migrating 'existing' storage_type to 'local' for package: ${identifier}`);
+        logger.log("[config]", `Migrating 'existing' storage_type to 'local' for package: ${identifier}`);
         config = {
           ...config,
           storage_type: "local" as const,
         };
         // Write migrated config back to disk
         await writePackageConfig(packagesDir, config);
-        console.log(`[config] Successfully migrated package config: ${identifier}`);
+        logger.log("[config]", `Successfully migrated package config: ${identifier}`);
       }
       
       return config;
@@ -89,7 +90,7 @@ export async function readPackageConfig(
     // Try legacy schema and migrate if found
     const legacyResult = LegacyPackageConfigSchema.safeParse(parsed);
     if (legacyResult.success) {
-      console.log(`[config] Migrating legacy package config: ${identifier}`);
+      logger.log("[config]", `Migrating legacy package config: ${identifier}`);
       const legacy = legacyResult.data;
       
       // Get default packages directory for migration
@@ -114,20 +115,20 @@ export async function readPackageConfig(
       
       // Write migrated config back to disk
       await writePackageConfig(packagesDir, migrated);
-      console.log(`[config] Successfully migrated package config: ${identifier}`);
+      logger.log("[config]", `Successfully migrated package config: ${identifier}`);
       
       return migrated;
     }
     
     // Neither schema matched - only log if not silent
     if (!silent) {
-      console.error(`[config] Failed to parse package config ${identifier}: Invalid schema`);
+      logger.error("[config]", `Failed to parse package config ${identifier}: Invalid schema`);
     }
     return null;
   } catch (error) {
     // Only log if not silent
     if (!silent) {
-      console.error(`[config] Error reading package config ${identifier}:`, error);
+      logger.error("[config]", `Error reading package config ${identifier}:`, error);
     }
     return null;
   }
@@ -361,24 +362,24 @@ export async function writeOpencodeConfig(
   // Clean up and validate provider structure
   const validated = { ...config };
   if (validated.provider) {
-    console.log(`[config] Processing providers:`, Object.keys(validated.provider));
+    logger.log("[config]", `Processing providers:`, Object.keys(validated.provider));
     const cleanedProvider: Record<string, any> = {};
     for (const [key, value] of Object.entries(validated.provider)) {
       // Only include valid provider objects
       if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
         cleanedProvider[key] = value;
-        console.log(`[config] Keeping valid provider '${key}'`);
+        logger.log("[config]", `Keeping valid provider '${key}'`);
       } else {
         // Log skipped invalid entries for debugging
-        console.log(`[config] Skipping invalid provider entry '${key}': expected object, got ${typeof value}`, value);
+        logger.log("[config]", `Skipping invalid provider entry '${key}': expected object, got ${typeof value}`, value);
       }
     }
     validated.provider = cleanedProvider;
-    console.log(`[config] Final providers after cleanup:`, Object.keys(validated.provider));
+    logger.log("[config]", `Final providers after cleanup:`, Object.keys(validated.provider));
   } else {
     // If provider is missing, initialize it as empty object
     validated.provider = {};
-    console.log(`[config] No provider field in config, initializing as empty object`);
+    logger.log("[config]", `No provider field in config, initializing as empty object`);
   }
 
   // Ensure $schema is set

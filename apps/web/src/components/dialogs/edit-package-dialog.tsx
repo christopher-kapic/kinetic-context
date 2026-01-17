@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -85,7 +85,7 @@ export function EditPackageDialog({
   const queryClient = useQueryClient();
 
   // Load existing package data
-  const packageQuery = orpc.packages.get.useQuery({ input: { identifier } });
+  const packageQuery = useQuery(orpc.packages.get.queryOptions({ input: { identifier } }));
 
   const mutation = useMutation(
     orpc.packages.update.mutationOptions({

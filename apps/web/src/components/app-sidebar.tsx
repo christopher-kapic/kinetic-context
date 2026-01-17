@@ -12,7 +12,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
-import { FolderKanban, Package, Brain, Settings, BookOpen } from "lucide-react";
+import { FolderKanban, Package, Brain, BookOpen } from "lucide-react";
 
 const navItems = [
   {
@@ -29,11 +29,6 @@ const navItems = [
     title: "Models",
     url: "/models",
     icon: Brain,
-  },
-  {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
   },
 ];
 

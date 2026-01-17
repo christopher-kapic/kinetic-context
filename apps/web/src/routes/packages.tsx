@@ -19,13 +19,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/packages")({
   component: PackagesComponent,
 });
 
+type FilterType = "all" | "projects" | "packages";
+
 function PackagesComponent() {
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
+  const [filter, setFilter] = useState<FilterType>("all");
   const packages = useQuery(orpc.packages.list.queryOptions());
   const queryClient = useQueryClient();
 
@@ -36,6 +46,20 @@ function PackagesComponent() {
     setScanDialogOpen(true);
   };
 
+  // Filter packages based on storage_type
+  const filteredPackages = packages.data?.filter((pkg) => {
+    if (filter === "all") return true;
+    if (filter === "projects") {
+      // Projects are local repositories
+      return pkg.storage_type === "local" || pkg.storage_type === "existing";
+    }
+    if (filter === "packages") {
+      // Packages are cloned repositories
+      return pkg.storage_type === "cloned";
+    }
+    return true;
+  }) || [];
+
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6 sm:py-8">
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -45,7 +69,17 @@ function PackagesComponent() {
             Manage your package configurations
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          <Select value={filter} onValueChange={(value) => setFilter(value as FilterType)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Filter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="projects">Projects</SelectItem>
+              <SelectItem value="packages">Packages</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             onClick={handleScan}
@@ -150,9 +184,9 @@ function PackagesComponent() {
             </Card>
           ))}
         </div>
-      ) : packages.data && packages.data.length > 0 ? (
+      ) : filteredPackages.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {packages.data.map((pkg) => (
+          {filteredPackages.map((pkg) => (
             <Link
               key={pkg.identifier}
               to="/package/$identifier"
@@ -204,6 +238,14 @@ function PackagesComponent() {
             </Link>
           ))}
         </div>
+      ) : packages.data && packages.data.length > 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-muted-foreground text-center mb-4">
+              No {filter === "projects" ? "projects" : filter === "packages" ? "packages" : "items"} match the current filter.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">

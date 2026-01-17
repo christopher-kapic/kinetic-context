@@ -13,6 +13,7 @@ import {
   type ProjectConfig,
   type ProjectDependency,
 } from "../../../../apps/server/src/utils/config";
+import { discoverGitRepositories } from "../../../../apps/server/src/utils/git";
 
 const CreateProjectInputSchema = z.object({
   identifier: z.string().min(1),
@@ -187,4 +188,39 @@ export const projectsRouter = {
       await writeProjectConfig(env.PROJECTS_DIR, updated);
       return updated;
     }),
+
+  scanProjects: publicProcedure.handler(async () => {
+    // Recursively scan projects directory for git repositories
+    const discoveredRepos = await discoverGitRepositories(env.PROJECTS_DIR);
+    
+    // For each discovered repo, create a suggested project config
+    const suggestions = await Promise.all(
+      discoveredRepos.map(async (repo) => {
+        // Extract directory name from path
+        const pathParts = repo.relativePath.split("/").filter(p => p.length > 0);
+        const dirName = pathParts.length > 0 
+          ? pathParts[pathParts.length - 1] 
+          : `repo-${Date.now()}`;
+        
+        // Identifier is lowercase version of directory name
+        const suggestedIdentifier = dirName.toLowerCase();
+        
+        // Display name is the directory name
+        const suggestedDisplayName = dirName;
+        
+        // Check if a project with this identifier already exists
+        const existing = await readProjectConfig(env.PROJECTS_DIR, suggestedIdentifier);
+        
+        return {
+          path: repo.path,
+          relativePath: repo.relativePath,
+          suggestedIdentifier,
+          suggestedDisplayName,
+          alreadyExists: !!existing,
+        };
+      })
+    );
+    
+    return suggestions;
+  }),
 };

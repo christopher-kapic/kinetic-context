@@ -108,6 +108,7 @@ export const configRouter = {
     .input(
       z.object({
         default_packages_dir: z.string().min(1),
+        default_agent_prompt: z.string().optional(),
       }),
     )
     .handler(async ({ input }) => {
@@ -116,6 +117,7 @@ export const configRouter = {
       try {
         await writeGlobalConfig(dataDir, {
           default_packages_dir: input.default_packages_dir,
+          default_agent_prompt: input.default_agent_prompt,
         });
         return { success: true };
       } catch (error) {

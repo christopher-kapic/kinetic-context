@@ -8,6 +8,7 @@ import { orpc } from "@/utils/orpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Settings } from "lucide-react";
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/settings")({
 
 const settingsSchema = z.object({
   default_packages_dir: z.string().min(1, "Default packages directory is required"),
+  default_agent_prompt: z.string().optional(),
 });
 
 type SettingsForm = z.infer<typeof settingsSchema>;
@@ -41,6 +43,7 @@ function SettingsComponent() {
   const form = useForm<SettingsForm>({
     defaultValues: {
       default_packages_dir: settings.data?.default_packages_dir || "/data/packages",
+      default_agent_prompt: settings.data?.default_agent_prompt || "",
     },
     validators: {
       onChange: settingsSchema,
@@ -48,13 +51,19 @@ function SettingsComponent() {
     onSubmit: async ({ value }) => {
       updateMutation.mutate({
         default_packages_dir: value.default_packages_dir,
+        default_agent_prompt: value.default_agent_prompt || undefined,
       });
     },
   });
 
   // Update form when settings load
-  if (settings.data && form.state.values.default_packages_dir !== settings.data.default_packages_dir) {
-    form.setFieldValue("default_packages_dir", settings.data.default_packages_dir);
+  if (settings.data) {
+    if (form.state.values.default_packages_dir !== settings.data.default_packages_dir) {
+      form.setFieldValue("default_packages_dir", settings.data.default_packages_dir);
+    }
+    if (form.state.values.default_agent_prompt !== (settings.data.default_agent_prompt || "")) {
+      form.setFieldValue("default_agent_prompt", settings.data.default_agent_prompt || "");
+    }
   }
 
   return (
@@ -82,9 +91,9 @@ function SettingsComponent() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Package Storage</CardTitle>
+            <CardTitle>Settings</CardTitle>
             <CardDescription>
-              Configure where cloned repositories are stored by default
+              Configure global settings for kinetic-context
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -94,7 +103,7 @@ function SettingsComponent() {
                 e.stopPropagation();
                 form.handleSubmit();
               }}
-              className="space-y-4"
+              className="space-y-6"
             >
               <form.Field name="default_packages_dir">
                 {(field) => {
@@ -112,6 +121,57 @@ function SettingsComponent() {
                       />
                       <p className="text-xs text-muted-foreground">
                         Default directory where cloned repositories will be stored. Use absolute paths.
+                      </p>
+                      {isInvalid && field.state.meta.errors && (
+                        <p className="text-xs text-destructive">
+                          {field.state.meta.errors[0]?.message || "Invalid value"}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }}
+              </form.Field>
+
+              <form.Field name="default_agent_prompt">
+                {(field) => {
+                  const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+                  const hasCustomPrompt = field.state.value && field.state.value.trim().length > 0;
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor={field.name}>Default Agent Prompt</Label>
+                        {hasCustomPrompt && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              field.handleChange("");
+                              // Auto-save when resetting
+                              const currentValues = form.state.values;
+                              updateMutation.mutate({
+                                default_packages_dir: currentValues.default_packages_dir,
+                                default_agent_prompt: undefined,
+                              });
+                            }}
+                            disabled={updateMutation.isPending}
+                          >
+                            Reset to Default
+                          </Button>
+                        )}
+                      </div>
+                      <Textarea
+                        id={field.name}
+                        value={field.state.value}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onBlur={field.handleBlur}
+                        placeholder="You are a helpful assistant specialized in answering questions about open-source codebases and dependencies..."
+                        aria-invalid={isInvalid}
+                        rows={10}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        This prompt is sent as a system message at the start of each new OpenCode session. It guides how the AI responds to questions about dependencies. Leave empty to use the default prompt.
                       </p>
                       {isInvalid && field.state.meta.errors && (
                         <p className="text-xs text-destructive">

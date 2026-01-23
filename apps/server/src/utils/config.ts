@@ -379,6 +379,7 @@ export async function writeOpencodeConfig(
 // Global config schema for kinetic-context settings
 const GlobalConfigSchema = z.object({
   default_packages_dir: z.string().default("/data/packages"),
+  default_agent_prompt: z.string().optional(),
 });
 
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
@@ -393,6 +394,13 @@ export async function readGlobalConfig(
       // Return default config
       return {
         default_packages_dir: "/data/packages",
+        default_agent_prompt: `You are a helpful assistant specialized in answering questions about open-source codebases and dependencies. When users ask questions:
+
+1. Provide clear, practical answers with code examples when relevant
+2. Reference specific files, functions, or patterns in the codebase when possible
+3. Explain not just what the code does, but how to use it effectively
+4. If the question is ambiguous, ask clarifying questions
+5. Focus on helping developers understand how to integrate and use the dependency in their projects`,
       };
     }
     const content = await readFile(configPath, "utf-8");
@@ -402,6 +410,13 @@ export async function readGlobalConfig(
     // If parsing fails, return default
     return {
       default_packages_dir: "/data/packages",
+      default_agent_prompt: `You are a helpful assistant specialized in answering questions about open-source codebases and dependencies. When users ask questions:
+
+1. Provide clear, practical answers with code examples when relevant
+2. Reference specific files, functions, or patterns in the codebase when possible
+3. Explain not just what the code does, but how to use it effectively
+4. If the question is ambiguous, ask clarifying questions
+5. Focus on helping developers understand how to integrate and use the dependency in their projects`,
     };
   }
 }

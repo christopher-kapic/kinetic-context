@@ -1,6 +1,7 @@
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { env } from "@kinetic-context/env/server";
 import { logger } from "./logger.js";
+import { readGlobalConfig } from "./config.js";
 
 /**
  * Get the opencode server URL from environment variable.
@@ -12,6 +13,17 @@ function getOpencodeUrl(): string {
   logger.log("[opencode]", `Using opencode URL: ${url}`);
   return url;
 }
+
+/**
+ * Default agent prompt for OpenCode sessions
+ */
+const DEFAULT_AGENT_PROMPT = `You are a helpful assistant specialized in answering questions about open-source codebases and dependencies. When users ask questions:
+
+1. Provide clear, practical answers with code examples when relevant
+2. Reference specific files, functions, or patterns in the codebase when possible
+3. Explain not just what the code does, but how to use it effectively
+4. If the question is ambiguous, ask clarifying questions
+5. Focus on helping developers understand how to integrate and use the dependency in their projects`;
 
 export interface OpencodeModel {
   providerID: string;
@@ -82,6 +94,33 @@ export async function* queryOpencodeStream(
 
     currentSessionId = sessionResult.data.id;
     logger.log("[opencode]", `Session created successfully: ${currentSessionId}`);
+    
+    // Send agent prompt as system message for new sessions
+    const dataDir = dirname(env.PACKAGES_DIR) || "/data";
+    const globalConfig = await readGlobalConfig(dataDir);
+    const agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
+    if (agentPrompt) {
+      logger.log("[opencode]", `Sending agent prompt to new session`);
+      try {
+        await client.session.prompt({
+          path: { id: currentSessionId },
+          body: {
+            noReply: true,
+            parts: [
+              {
+                type: "text",
+                text: agentPrompt,
+              },
+            ],
+          },
+        });
+        logger.log("[opencode]", `Agent prompt sent successfully`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error("[opencode]", `Error sending agent prompt:`, errorMessage);
+        // Don't throw - continue with the query even if prompt fails
+      }
+    }
   } else {
     logger.log("[opencode]", `Reusing existing session: ${currentSessionId}`);
   }
@@ -291,6 +330,33 @@ export async function queryOpencode(
       currentSessionId = sessionResult.data.id;
       logger.log("[opencode]", `Session created successfully: ${currentSessionId}`);
       logger.log("[opencode]", `Session ID type: ${typeof currentSessionId}, starts with 'ses': ${String(currentSessionId).startsWith('ses')}`);
+      
+      // Send agent prompt as system message for new sessions
+      const dataDir = dirname(env.PACKAGES_DIR) || "/data";
+      const globalConfig = await readGlobalConfig(dataDir);
+      const agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
+      if (agentPrompt) {
+        logger.log("[opencode]", `Sending agent prompt to new session`);
+        try {
+          await client.session.prompt({
+            path: { id: currentSessionId },
+            body: {
+              noReply: true,
+              parts: [
+                {
+                  type: "text",
+                  text: agentPrompt,
+                },
+              ],
+            },
+          });
+          logger.log("[opencode]", `Agent prompt sent successfully`);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.error("[opencode]", `Error sending agent prompt:`, errorMessage);
+          // Don't throw - continue with the query even if prompt fails
+        }
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error && error.stack ? error.stack : undefined;

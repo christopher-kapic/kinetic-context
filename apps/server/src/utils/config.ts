@@ -280,6 +280,21 @@ export type OpencodeConfig = {
       [key: string]: unknown;
     }
   >;
+  agent?: Record<
+    string,
+    {
+      mode?: "primary" | "subagent" | "all";
+      model?: string;
+      prompt?: string;
+      description?: string;
+      tools?: {
+        write?: boolean;
+        edit?: boolean;
+        bash?: boolean;
+      };
+      [key: string]: unknown;
+    }
+  > | string; // Support both object format and legacy string format
   [key: string]: unknown;
 };
 
@@ -289,10 +304,21 @@ export async function readOpencodeConfig(
   try {
     const { existsSync } = await import("node:fs");
     if (!existsSync(configPath)) {
-      // Return default empty config
+      // Return default config with default agent
       return {
         $schema: "https://opencode.ai/config.json",
         provider: {},
+        agent: {
+          default: {
+            mode: "primary",
+            prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+            tools: {
+              write: false,
+              edit: false,
+              bash: false,
+            },
+          },
+        },
       };
     }
     const content = await readFile(configPath, "utf-8");
@@ -302,6 +328,17 @@ export async function readOpencodeConfig(
       return {
         $schema: "https://opencode.ai/config.json",
         provider: {},
+        agent: {
+          default: {
+            mode: "primary",
+            prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+            tools: {
+              write: false,
+              edit: false,
+              bash: false,
+            },
+          },
+        },
       };
     }
     
@@ -318,6 +355,22 @@ export async function readOpencodeConfig(
       parsed.provider = cleanedProvider;
     }
     
+    // Ensure default agent exists if agent config is missing or doesn't have default
+    if (!parsed.agent || typeof parsed.agent !== "object" || !parsed.agent.default) {
+      if (!parsed.agent) {
+        parsed.agent = {};
+      }
+      parsed.agent.default = {
+        mode: "primary",
+        prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+        tools: {
+          write: false,
+          edit: false,
+          bash: false,
+        },
+      };
+    }
+    
     return parsed as OpencodeConfig;
   } catch (error) {
     // If parsing fails, return default
@@ -325,6 +378,17 @@ export async function readOpencodeConfig(
       return {
         $schema: "https://opencode.ai/config.json",
         provider: {},
+        agent: {
+          default: {
+            mode: "primary",
+            prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+            tools: {
+              write: false,
+              edit: false,
+              bash: false,
+            },
+          },
+        },
       };
     }
     throw error;
@@ -373,6 +437,22 @@ export async function writeOpencodeConfig(
     validated.$schema = "https://opencode.ai/config.json";
   }
 
+  // Ensure default agent exists if agent config is missing or doesn't have default
+  if (!validated.agent || typeof validated.agent !== "object" || !validated.agent.default) {
+    if (!validated.agent) {
+      validated.agent = {};
+    }
+    validated.agent.default = {
+      mode: "primary",
+      prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+      tools: {
+        write: false,
+        edit: false,
+        bash: false,
+      },
+    };
+  }
+
   await writeFile(configPath, JSON.stringify(validated, null, 2), "utf-8");
 }
 
@@ -394,7 +474,7 @@ export async function readGlobalConfig(
       // Return default config
       return {
         default_packages_dir: "/data/packages",
-        default_agent_prompt: `You are a helpful assistant specialized in answering questions about open-source codebases and dependencies. When users ask questions:
+        default_agent_prompt: `You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:
 
 1. Provide clear, practical answers with code examples when relevant
 2. Reference specific files, functions, or patterns in the codebase when possible
@@ -410,7 +490,7 @@ export async function readGlobalConfig(
     // If parsing fails, return default
     return {
       default_packages_dir: "/data/packages",
-      default_agent_prompt: `You are a helpful assistant specialized in answering questions about open-source codebases and dependencies. When users ask questions:
+      default_agent_prompt: `You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:
 
 1. Provide clear, practical answers with code examples when relevant
 2. Reference specific files, functions, or patterns in the codebase when possible

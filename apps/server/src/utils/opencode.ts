@@ -17,7 +17,7 @@ function getOpencodeUrl(): string {
 /**
  * Default agent prompt for OpenCode sessions
  */
-const DEFAULT_AGENT_PROMPT = `You are a helpful assistant specialized in answering questions about open-source codebases and dependencies. When users ask questions:
+const DEFAULT_AGENT_PROMPT = `You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:
 
 1. Provide clear, practical answers with code examples when relevant
 2. Reference specific files, functions, or patterns in the codebase when possible
@@ -95,20 +95,30 @@ export async function* queryOpencodeStream(
     currentSessionId = sessionResult.data.id;
     logger.log("[opencode]", `Session created successfully: ${currentSessionId}`);
     
-    // Send agent prompt as system message for new sessions
-    // First try to get from opencode.json, then fall back to global config
-    const configPath = env.OPENCODE_CONFIG_PATH;
-    const opencodeConfig = await readOpencodeConfig(configPath);
-    let agentPrompt: string | undefined;
-    
-    if (opencodeConfig.agent && typeof opencodeConfig.agent === "string") {
-      agentPrompt = opencodeConfig.agent;
-    } else {
-      // Fall back to global config
-      const dataDir = dirname(env.PACKAGES_DIR) || "/data";
-      const globalConfig = await readGlobalConfig(dataDir);
-      agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
-    }
+      // Send agent prompt as system message for new sessions
+      // First try to get from opencode.json agent config, then fall back to global config
+      const configPath = env.OPENCODE_CONFIG_PATH;
+      const opencodeConfig = await readOpencodeConfig(configPath);
+      let agentPrompt: string | undefined;
+      
+      // Check for agent config in opencode.json (new format)
+      if (opencodeConfig.agent && typeof opencodeConfig.agent === "object") {
+        // Try to get prompt from default agent
+        const defaultAgent = (opencodeConfig.agent as any).default;
+        if (defaultAgent && typeof defaultAgent === "object" && typeof defaultAgent.prompt === "string") {
+          agentPrompt = defaultAgent.prompt;
+        }
+        // Fallback: check if agent is a string (legacy format)
+      } else if (opencodeConfig.agent && typeof opencodeConfig.agent === "string") {
+        agentPrompt = opencodeConfig.agent;
+      }
+      
+      // If no prompt found in opencode config, fall back to global config
+      if (!agentPrompt) {
+        const dataDir = dirname(env.PACKAGES_DIR) || "/data";
+        const globalConfig = await readGlobalConfig(dataDir);
+        agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
+      }
     if (agentPrompt) {
       logger.log("[opencode]", `Sending agent prompt to new session`);
       try {
@@ -342,15 +352,25 @@ export async function queryOpencode(
       logger.log("[opencode]", `Session ID type: ${typeof currentSessionId}, starts with 'ses': ${String(currentSessionId).startsWith('ses')}`);
       
       // Send agent prompt as system message for new sessions
-      // First try to get from opencode.json, then fall back to global config
+      // First try to get from opencode.json agent config, then fall back to global config
       const configPath = env.OPENCODE_CONFIG_PATH;
       const opencodeConfig = await readOpencodeConfig(configPath);
       let agentPrompt: string | undefined;
       
-      if (opencodeConfig.agent && typeof opencodeConfig.agent === "string") {
+      // Check for agent config in opencode.json (new format)
+      if (opencodeConfig.agent && typeof opencodeConfig.agent === "object") {
+        // Try to get prompt from default agent
+        const defaultAgent = (opencodeConfig.agent as any).default;
+        if (defaultAgent && typeof defaultAgent === "object" && typeof defaultAgent.prompt === "string") {
+          agentPrompt = defaultAgent.prompt;
+        }
+        // Fallback: check if agent is a string (legacy format)
+      } else if (opencodeConfig.agent && typeof opencodeConfig.agent === "string") {
         agentPrompt = opencodeConfig.agent;
-      } else {
-        // Fall back to global config
+      }
+      
+      // If no prompt found in opencode config, fall back to global config
+      if (!agentPrompt) {
         const dataDir = dirname(env.PACKAGES_DIR) || "/data";
         const globalConfig = await readGlobalConfig(dataDir);
         agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;

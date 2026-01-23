@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const opencodeZenSchema = z.object({
   providerId: z.string().min(1, "Provider ID is required"),
@@ -28,21 +30,22 @@ export function OpenCodeZenProviderForm({
   onSave,
   onCancel,
 }: OpenCodeZenProviderFormProps) {
-  // Extract models without the opencode/ prefix for display
+  // Extract models for display (models are stored without prefix, like OpenRouter)
   const getModelsForDisplay = (models: Record<string, any> | undefined): string => {
-    if (!models) return "opencode/gpt-5.2-codex\nopencode/claude-sonnet-4-5";
+    if (!models) return "gpt-5.2-codex\nclaude-sonnet-4-5";
     return Object.keys(models)
-      .map((id) => id.replace(/^opencode\//, ""))
+      .map((id) => id.replace(/^opencode\//, "")) // Remove prefix if present (for backward compat)
       .join("\n");
   };
 
   const [modelsText, setModelsText] = useState(
     getModelsForDisplay(initialData?.models)
   );
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
 
   const form = useForm<OpenCodeZenForm>({
     defaultValues: {
-      providerId: initialProviderId || "opencode-zen",
+      providerId: initialProviderId || "opencode",
       apiKey: initialData?.options?.apiKey || "",
       baseURL: initialData?.options?.baseURL || "https://opencode.ai/zen/v1",
       models: modelsText,
@@ -61,13 +64,12 @@ export function OpenCodeZenProviderForm({
 
       const models: Record<string, any> = {};
       for (const modelId of modelIds) {
-        // Ensure opencode/ prefix is present - store with prefix
-        // The model key should include the opencode/ prefix (e.g., "opencode/gpt-5.2-codex")
-        const modelIdWithPrefix = modelId.startsWith("opencode/")
-          ? modelId
-          : `opencode/${modelId}`;
-        models[modelIdWithPrefix] = {
-          name: modelIdWithPrefix.split("/").pop() || modelIdWithPrefix,
+        // Remove opencode/ prefix if user included it - store as raw model ID
+        // The model key should be the raw model ID (e.g., "gpt-5.2-codex")
+        // The provider prefix will be added when selecting the model, not when storing
+        const cleanModelId = modelId.replace(/^opencode\//, "");
+        models[cleanModelId] = {
+          name: cleanModelId,
         };
       }
 
@@ -84,6 +86,44 @@ export function OpenCodeZenProviderForm({
       onSave(value.providerId, config);
     },
   });
+
+  const fetchModels = async () => {
+    const currentValues = form.state.values;
+    const apiKey = currentValues.apiKey;
+    const baseURL = currentValues.baseURL || "https://opencode.ai/zen/v1";
+
+    if (!apiKey) {
+      toast.error("Please enter an API key first");
+      return;
+    }
+
+    setIsLoadingModels(true);
+    try {
+      const response = await fetch(`${baseURL}/models`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (data.data && Array.isArray(data.data)) {
+        const modelIds = data.data.map((model: any) => model.id).join("\n");
+        setModelsText(modelIds);
+        form.setFieldValue("models", modelIds);
+        toast.success(`Loaded ${data.data.length} models`);
+      } else {
+        throw new Error("Invalid response format");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to fetch models");
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
 
   // Sync modelsText state and form values when initialData changes
   useEffect(() => {
@@ -115,7 +155,7 @@ export function OpenCodeZenProviderForm({
                 value={field.state.value}
                 onChange={(e) => field.handleChange(e.target.value)}
                 onBlur={field.handleBlur}
-                placeholder="opencode-zen"
+                placeholder="opencode"
                 aria-invalid={isInvalid}
                 disabled={!!initialProviderId}
               />
@@ -191,7 +231,25 @@ export function OpenCodeZenProviderForm({
       </form.Field>
 
       <div className="space-y-2">
-        <Label htmlFor="models">Models (one per line)</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="models">Models (one per line)</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={fetchModels}
+            disabled={isLoadingModels || !form.state.values.apiKey}
+          >
+            {isLoadingModels ? (
+              <>
+                <Loader2 className="size-3 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              "Fetch Models"
+            )}
+          </Button>
+        </div>
         <Textarea
           id="models"
           value={modelsText}
@@ -199,11 +257,11 @@ export function OpenCodeZenProviderForm({
             setModelsText(e.target.value);
             form.setFieldValue("models", e.target.value);
           }}
-          placeholder="opencode/gpt-5.2-codex&#10;opencode/claude-sonnet-4-5&#10;opencode/kimi-k2"
+          placeholder="gpt-5.2-codex&#10;claude-sonnet-4-5&#10;kimi-k2"
           rows={6}
         />
         <p className="text-xs text-muted-foreground">
-          Enter model IDs, one per line. Format: opencode/model-name (e.g., opencode/gpt-5.2-codex). The opencode/ prefix will be added automatically if omitted.
+          Enter model IDs, one per line (e.g., gpt-5.2-codex). Click "Fetch Models" to automatically load all available models from OpenCode Zen.
         </p>
       </div>
 

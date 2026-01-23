@@ -66,7 +66,7 @@ export function EditProviderDialog({
 
   // Determine provider type based on providerId or config
   const isOpenRouter = providerId === "openrouter" || providerConfig.npm === "@openrouter/ai-sdk-provider";
-  const isOpenCodeZen = providerId === "opencode-zen" || 
+  const isOpenCodeZen = providerId === "opencode" || providerId === "opencode-zen" || 
     (providerConfig.npm === "@ai-sdk/openai-compatible" && 
      providerConfig.options?.baseURL?.includes("opencode.ai/zen"));
   const isGitHubCopilot = providerId === "github-copilot" || providerConfig.npm === "@ai-sdk/github-copilot";

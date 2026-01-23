@@ -1,7 +1,7 @@
 import { join, dirname } from "node:path";
 import { env } from "@kinetic-context/env/server";
 import { logger } from "./logger.js";
-import { readGlobalConfig } from "./config.js";
+import { readGlobalConfig, readOpencodeConfig } from "./config.js";
 
 /**
  * Get the opencode server URL from environment variable.
@@ -96,9 +96,19 @@ export async function* queryOpencodeStream(
     logger.log("[opencode]", `Session created successfully: ${currentSessionId}`);
     
     // Send agent prompt as system message for new sessions
-    const dataDir = dirname(env.PACKAGES_DIR) || "/data";
-    const globalConfig = await readGlobalConfig(dataDir);
-    const agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
+    // First try to get from opencode.json, then fall back to global config
+    const configPath = env.OPENCODE_CONFIG_PATH;
+    const opencodeConfig = await readOpencodeConfig(configPath);
+    let agentPrompt: string | undefined;
+    
+    if (opencodeConfig.agent && typeof opencodeConfig.agent === "string") {
+      agentPrompt = opencodeConfig.agent;
+    } else {
+      // Fall back to global config
+      const dataDir = dirname(env.PACKAGES_DIR) || "/data";
+      const globalConfig = await readGlobalConfig(dataDir);
+      agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
+    }
     if (agentPrompt) {
       logger.log("[opencode]", `Sending agent prompt to new session`);
       try {
@@ -332,9 +342,19 @@ export async function queryOpencode(
       logger.log("[opencode]", `Session ID type: ${typeof currentSessionId}, starts with 'ses': ${String(currentSessionId).startsWith('ses')}`);
       
       // Send agent prompt as system message for new sessions
-      const dataDir = dirname(env.PACKAGES_DIR) || "/data";
-      const globalConfig = await readGlobalConfig(dataDir);
-      const agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
+      // First try to get from opencode.json, then fall back to global config
+      const configPath = env.OPENCODE_CONFIG_PATH;
+      const opencodeConfig = await readOpencodeConfig(configPath);
+      let agentPrompt: string | undefined;
+      
+      if (opencodeConfig.agent && typeof opencodeConfig.agent === "string") {
+        agentPrompt = opencodeConfig.agent;
+      } else {
+        // Fall back to global config
+        const dataDir = dirname(env.PACKAGES_DIR) || "/data";
+        const globalConfig = await readGlobalConfig(dataDir);
+        agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
+      }
       if (agentPrompt) {
         logger.log("[opencode]", `Sending agent prompt to new session`);
         try {

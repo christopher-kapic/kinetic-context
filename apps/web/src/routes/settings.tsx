@@ -27,12 +27,12 @@ type SettingsForm = z.infer<typeof settingsSchema>;
 function SettingsComponent() {
   const queryClient = useQueryClient();
   const settings = useQuery(orpc.config.getSettings.queryOptions());
+  const opencodeConfig = useQuery(orpc.config.get.queryOptions());
 
-  const updateMutation = useMutation(
+  const updateSettingsMutation = useMutation(
     orpc.config.updateSettings.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: orpc.config.getSettings.key() });
-        toast.success("Settings updated successfully");
       },
       onError: (error: any) => {
         toast.error(error.message || "Failed to update settings");
@@ -40,29 +40,58 @@ function SettingsComponent() {
     })
   );
 
+  const updateConfigMutation = useMutation(
+    orpc.config.update.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.config.get.key() });
+        toast.success("Settings updated successfully");
+      },
+      onError: (error: any) => {
+        toast.error(error.message || "Failed to update configuration");
+      },
+    })
+  );
+
+  // Get agent prompt from opencode.json first, then fall back to global config
+  const agentPrompt = opencodeConfig.data?.agent || settings.data?.default_agent_prompt || "";
+
   const form = useForm<SettingsForm>({
     defaultValues: {
       default_packages_dir: settings.data?.default_packages_dir || "/data/packages",
-      default_agent_prompt: settings.data?.default_agent_prompt || "",
+      default_agent_prompt: agentPrompt,
     },
     validators: {
       onChange: settingsSchema,
     },
     onSubmit: async ({ value }) => {
-      updateMutation.mutate({
+      // Update global settings (for default_packages_dir)
+      updateSettingsMutation.mutate({
         default_packages_dir: value.default_packages_dir,
-        default_agent_prompt: value.default_agent_prompt || undefined,
+        default_agent_prompt: undefined, // Remove from global config, store in opencode.json instead
       });
+
+      // Update opencode.json with agent prompt
+      const currentConfig = opencodeConfig.data || { $schema: "https://opencode.ai/config.json", provider: {} };
+      const updatedConfig = {
+        ...currentConfig,
+        agent: value.default_agent_prompt || undefined,
+      };
+      // Remove agent field if it's empty
+      if (!value.default_agent_prompt || value.default_agent_prompt.trim().length === 0) {
+        delete updatedConfig.agent;
+      }
+      updateConfigMutation.mutate({ config: updatedConfig });
     },
   });
 
-  // Update form when settings load
-  if (settings.data) {
-    if (form.state.values.default_packages_dir !== settings.data.default_packages_dir) {
+  // Update form when settings or config load
+  if (settings.data || opencodeConfig.data) {
+    if (settings.data && form.state.values.default_packages_dir !== settings.data.default_packages_dir) {
       form.setFieldValue("default_packages_dir", settings.data.default_packages_dir);
     }
-    if (form.state.values.default_agent_prompt !== (settings.data.default_agent_prompt || "")) {
-      form.setFieldValue("default_agent_prompt", settings.data.default_agent_prompt || "");
+    const currentAgentPrompt = agentPrompt;
+    if (form.state.values.default_agent_prompt !== currentAgentPrompt) {
+      form.setFieldValue("default_agent_prompt", currentAgentPrompt);
     }
   }
 
@@ -78,7 +107,7 @@ function SettingsComponent() {
         </p>
       </div>
 
-      {settings.isLoading ? (
+      {settings.isLoading || opencodeConfig.isLoading ? (
         <Card>
           <CardHeader>
             <Skeleton className="h-5 w-32" />
@@ -149,12 +178,17 @@ function SettingsComponent() {
                               field.handleChange("");
                               // Auto-save when resetting
                               const currentValues = form.state.values;
-                              updateMutation.mutate({
+                              updateSettingsMutation.mutate({
                                 default_packages_dir: currentValues.default_packages_dir,
                                 default_agent_prompt: undefined,
                               });
+                              // Remove agent from opencode.json
+                              const currentConfig = opencodeConfig.data || { $schema: "https://opencode.ai/config.json", provider: {} };
+                              const updatedConfig = { ...currentConfig };
+                              delete updatedConfig.agent;
+                              updateConfigMutation.mutate({ config: updatedConfig });
                             }}
-                            disabled={updateMutation.isPending}
+                            disabled={updateSettingsMutation.isPending || updateConfigMutation.isPending}
                           >
                             Reset to Default
                           </Button>
@@ -184,8 +218,8 @@ function SettingsComponent() {
               </form.Field>
 
               <div className="flex justify-end">
-                <Button type="submit" disabled={updateMutation.isPending}>
-                  {updateMutation.isPending ? "Saving..." : "Save Settings"}
+                <Button type="submit" disabled={updateSettingsMutation.isPending || updateConfigMutation.isPending}>
+                  {updateSettingsMutation.isPending || updateConfigMutation.isPending ? "Saving..." : "Save Settings"}
                 </Button>
               </div>
             </form>

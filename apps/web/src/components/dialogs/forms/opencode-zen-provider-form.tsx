@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { orpcClient } from "@/utils/orpc";
 
 const opencodeZenSchema = z.object({
   providerId: z.string().min(1, "Provider ID is required"),
@@ -99,27 +100,21 @@ export function OpenCodeZenProviderForm({
 
     setIsLoadingModels(true);
     try {
-      const response = await fetch(`${baseURL}/models`, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
+      const result = await orpcClient.config.fetchOpencodeZenModels({
+        apiKey,
+        baseURL: baseURL !== "https://opencode.ai/zen/v1" ? baseURL : undefined,
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (data.data && Array.isArray(data.data)) {
-        const modelIds = data.data.map((model: any) => model.id).join("\n");
+      if (result.models && Array.isArray(result.models)) {
+        const modelIds = result.models.map((model) => model.id).join("\n");
         setModelsText(modelIds);
         form.setFieldValue("models", modelIds);
-        toast.success(`Loaded ${data.data.length} models`);
+        toast.success(`Loaded ${result.models.length} models`);
       } else {
         throw new Error("Invalid response format");
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to fetch models");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to fetch models");
     } finally {
       setIsLoadingModels(false);
     }

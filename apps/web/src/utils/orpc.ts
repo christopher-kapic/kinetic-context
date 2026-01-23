@@ -41,3 +41,6 @@ export const link = new RPCLink({
 export const client: AppRouterClient = createORPCClient(link);
 
 export const orpc = createTanstackQueryUtils(client);
+
+// Export client for direct calls when needed (e.g., outside of React hooks)
+export { client as orpcClient };

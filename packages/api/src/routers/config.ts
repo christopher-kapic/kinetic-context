@@ -127,4 +127,45 @@ export const configRouter = {
         });
       }
     }),
+
+  fetchOpencodeZenModels: publicProcedure
+    .input(
+      z.object({
+        apiKey: z.string().min(1, "API key is required"),
+        baseURL: z.string().url().optional(),
+      }),
+    )
+    .handler(async ({ input }) => {
+      const baseURL = input.baseURL || "https://opencode.ai/zen/v1";
+      try {
+        const response = await fetch(`${baseURL}/models`, {
+          headers: {
+            Authorization: `Bearer ${input.apiKey}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch models: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        if (data.data && Array.isArray(data.data)) {
+          return {
+            models: data.data.map((model: any) => ({
+              id: model.id,
+              object: model.object,
+              created: model.created,
+              owned_by: model.owned_by,
+            })),
+          };
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } catch (error) {
+        throw new ORPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch models from OpenCode Zen",
+        });
+      }
+    }),
 };

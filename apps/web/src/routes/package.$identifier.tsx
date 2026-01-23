@@ -5,8 +5,9 @@ import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Loader2, MessageSquare, Edit } from "lucide-react";
+import { Loader2, MessageSquare, Edit, Copy } from "lucide-react";
 import { EditPackageDialog } from "@/components/dialogs/edit-package-dialog";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/package/$identifier")({
   component: PackageDetailComponent,
@@ -17,6 +18,16 @@ function PackageDetailComponent() {
   const router = useRouterState();
   const isChatRoute = router.location.pathname.includes("/chat");
   const pkg = useQuery(orpc.packages.get.queryOptions({ input: { identifier } }));
+
+  const handleCopyIdentifier = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(identifier);
+      toast.success("Package ID copied to clipboard");
+    } catch (error) {
+      toast.error("Failed to copy package ID");
+    }
+  };
 
   if (pkg.isLoading) {
     return (
@@ -57,9 +68,20 @@ function PackageDetailComponent() {
                     <Loader2 className="size-5 animate-spin text-muted-foreground" />
                   )}
                 </h1>
-                <p className="text-sm sm:text-base text-muted-foreground mt-1">
-                  {pkg.data.identifier}
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-sm sm:text-base text-muted-foreground">
+                    {pkg.data.identifier}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={handleCopyIdentifier}
+                    title="Copy package ID"
+                  >
+                    <Copy className="size-3" />
+                  </Button>
+                </div>
               </div>
               <div className="flex gap-2">
                 <EditPackageDialog identifier={pkg.data.identifier}>

@@ -17,6 +17,7 @@ import { getSafeProvider } from "@/utils/config";
 import { OpenRouterProviderForm } from "./forms/openrouter-provider-form";
 import { GitHubCopilotProviderForm } from "./forms/github-copilot-provider-form";
 import { CustomProviderForm } from "./forms/custom-provider-form";
+import { OpenCodeZenProviderForm } from "./forms/opencode-zen-provider-form";
 import { Settings } from "lucide-react";
 
 interface EditProviderDialogProps {
@@ -65,6 +66,9 @@ export function EditProviderDialog({
 
   // Determine provider type based on providerId or config
   const isOpenRouter = providerId === "openrouter" || providerConfig.npm === "@openrouter/ai-sdk-provider";
+  const isOpenCodeZen = providerId === "opencode-zen" || 
+    (providerConfig.npm === "@ai-sdk/openai-compatible" && 
+     providerConfig.options?.baseURL?.includes("opencode.ai/zen"));
   const isGitHubCopilot = providerId === "github-copilot" || providerConfig.npm === "@ai-sdk/github-copilot";
 
   return (
@@ -86,6 +90,13 @@ export function EditProviderDialog({
 
         {isOpenRouter ? (
           <OpenRouterProviderForm
+            initialData={providerConfig}
+            providerId={providerId}
+            onSave={handleProviderUpdated}
+            onCancel={() => setOpen(false)}
+          />
+        ) : isOpenCodeZen ? (
+          <OpenCodeZenProviderForm
             initialData={providerConfig}
             providerId={providerId}
             onSave={handleProviderUpdated}

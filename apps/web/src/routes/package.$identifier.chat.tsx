@@ -4,7 +4,8 @@ import { orpc } from "@/utils/orpc";
 import { PackageChat } from "@/components/package-chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Copy } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/package/$identifier/chat")({
   component: PackageChatPage,
@@ -13,6 +14,16 @@ export const Route = createFileRoute("/package/$identifier/chat")({
 function PackageChatPage() {
   const { identifier } = Route.useParams();
   const pkg = useQuery(orpc.packages.get.queryOptions({ input: { identifier } }));
+
+  const handleCopyIdentifier = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(identifier);
+      toast.success("Package ID copied to clipboard");
+    } catch (error) {
+      toast.error("Failed to copy package ID");
+    }
+  };
 
   if (pkg.isLoading) {
     return (
@@ -54,9 +65,20 @@ function PackageChatPage() {
               )}
               {pkg.data.display_name}
             </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              {pkg.data.identifier}
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-sm sm:text-base text-muted-foreground">
+                {pkg.data.identifier}
+              </p>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={handleCopyIdentifier}
+                title="Copy package ID"
+              >
+                <Copy className="size-3" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>

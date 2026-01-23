@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CreatePackageDialog } from "@/components/dialogs/create-package-dialog";
 import { ExportPackagesDialog } from "@/components/dialogs/export-packages-dialog";
 import { ImportPackagesDialog } from "@/components/dialogs/import-packages-dialog";
-import { Plus, Loader2, Search, X, Download, Upload } from "lucide-react";
+import { Plus, Loader2, Search, X, Download, Upload, Copy } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -44,6 +44,17 @@ function PackagesComponent() {
   const handleScan = () => {
     scanQuery.refetch();
     setScanDialogOpen(true);
+  };
+
+  const handleCopyIdentifier = async (e: React.MouseEvent, identifier: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(identifier);
+      toast.success("Package ID copied to clipboard");
+    } catch (error) {
+      toast.error("Failed to copy package ID");
+    }
   };
 
   // Filter packages based on storage_type
@@ -207,8 +218,17 @@ function PackagesComponent() {
                       <Loader2 className="size-4 animate-spin text-muted-foreground" />
                     )}
                   </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
-                    {pkg.identifier}
+                  <CardDescription className="text-xs sm:text-sm flex items-center gap-1.5">
+                    <span>{pkg.identifier}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 -mr-1"
+                      onClick={(e) => handleCopyIdentifier(e, pkg.identifier)}
+                      title="Copy package ID"
+                    >
+                      <Copy className="size-3" />
+                    </Button>
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

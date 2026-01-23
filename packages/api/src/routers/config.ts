@@ -22,6 +22,12 @@ const WELL_KNOWN_PROVIDERS = [
     description: "Access multiple AI models through OpenRouter",
   },
   {
+    id: "opencode-zen",
+    name: "OpenCode Zen",
+    npm: "@ai-sdk/openai-compatible",
+    description: "Curated AI models from OpenCode Zen",
+  },
+  {
     id: "github-copilot",
     name: "GitHub Copilot",
     npm: "@ai-sdk/github-copilot",

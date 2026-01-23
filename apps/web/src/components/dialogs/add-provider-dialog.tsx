@@ -19,8 +19,9 @@ import { getSafeProvider } from "@/utils/config";
 import { OpenRouterProviderForm } from "./forms/openrouter-provider-form";
 import { GitHubCopilotProviderForm } from "./forms/github-copilot-provider-form";
 import { CustomProviderForm } from "./forms/custom-provider-form";
+import { OpenCodeZenProviderForm } from "./forms/opencode-zen-provider-form";
 
-type ProviderType = "openrouter" | "github-copilot" | "custom";
+type ProviderType = "openrouter" | "github-copilot" | "opencode-zen" | "custom";
 
 interface AddProviderDialogProps {
   children: React.ReactNode;
@@ -99,6 +100,7 @@ export function AddProviderDialog({ children }: AddProviderDialogProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="openrouter">OpenRouter</SelectItem>
+                  <SelectItem value="opencode-zen">OpenCode Zen</SelectItem>
                   <SelectItem value="github-copilot">GitHub Copilot</SelectItem>
                   <SelectItem value="custom">Custom Provider</SelectItem>
                 </SelectContent>
@@ -117,6 +119,13 @@ export function AddProviderDialog({ children }: AddProviderDialogProps) {
 
             {providerType === "openrouter" && (
               <OpenRouterProviderForm
+                onSave={handleProviderAdded}
+                onCancel={() => setProviderType(null)}
+              />
+            )}
+
+            {providerType === "opencode-zen" && (
+              <OpenCodeZenProviderForm
                 onSave={handleProviderAdded}
                 onCancel={() => setProviderType(null)}
               />

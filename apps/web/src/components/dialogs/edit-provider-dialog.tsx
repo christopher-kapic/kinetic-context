@@ -48,16 +48,28 @@ export function EditProviderDialog({
     })
   );
 
-  const handleProviderUpdated = (updatedConfig: any) => {
+  const handleProviderUpdated = (updatedProviderId: string, updatedConfig: any) => {
     if (!config.data) return;
 
+    // Validate providerConfig is a valid object
+    if (!updatedConfig || typeof updatedConfig !== 'object' || Array.isArray(updatedConfig)) {
+      toast.error("Invalid provider configuration");
+      return;
+    }
+
     const safeProvider = getSafeProvider(config.data.provider);
+
+    // Remove the old provider entry if the ID changed
+    const cleanedProvider = { ...safeProvider };
+    if (updatedProviderId !== providerId) {
+      delete cleanedProvider[providerId];
+    }
 
     const updated = {
       ...config.data,
       provider: {
-        ...safeProvider,
-        [providerId]: updatedConfig,
+        ...cleanedProvider,
+        [updatedProviderId]: updatedConfig,
       },
     };
 

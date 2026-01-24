@@ -18,7 +18,6 @@ export const Route = createFileRoute("/settings")({
 });
 
 const settingsSchema = z.object({
-  default_packages_dir: z.string().min(1, "Default packages directory is required"),
   default_agent_prompt: z.string().optional(),
 });
 
@@ -57,17 +56,15 @@ function SettingsComponent() {
 
   const form = useForm<SettingsForm>({
     defaultValues: {
-      default_packages_dir: settings.data?.default_packages_dir || "/data/packages",
       default_agent_prompt: agentPrompt,
     },
     validators: {
       onChange: settingsSchema,
     },
     onSubmit: async ({ value }) => {
-      // Update global settings (for default_packages_dir)
+      // Update global settings (remove default_agent_prompt from global config, store in opencode.json instead)
       updateSettingsMutation.mutate({
-        default_packages_dir: value.default_packages_dir,
-        default_agent_prompt: undefined, // Remove from global config, store in opencode.json instead
+        default_agent_prompt: undefined,
       });
 
       // Update opencode.json with agent prompt
@@ -77,7 +74,7 @@ function SettingsComponent() {
         agent: value.default_agent_prompt || undefined,
       };
       // Remove agent field if it's empty
-      if (!value.default_agent_prompt || value.default_agent_prompt.trim().length === 0) {
+      if (!value.default_agent_prompt || (typeof value.default_agent_prompt === 'string' && value.default_agent_prompt.trim().length === 0)) {
         delete updatedConfig.agent;
       }
       updateConfigMutation.mutate({ config: updatedConfig });
@@ -86,9 +83,6 @@ function SettingsComponent() {
 
   // Update form when settings or config load
   if (settings.data || opencodeConfig.data) {
-    if (settings.data && form.state.values.default_packages_dir !== settings.data.default_packages_dir) {
-      form.setFieldValue("default_packages_dir", settings.data.default_packages_dir);
-    }
     const currentAgentPrompt = agentPrompt;
     if (form.state.values.default_agent_prompt !== currentAgentPrompt) {
       form.setFieldValue("default_agent_prompt", currentAgentPrompt);
@@ -134,37 +128,11 @@ function SettingsComponent() {
               }}
               className="space-y-6"
             >
-              <form.Field name="default_packages_dir">
-                {(field) => {
-                  const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-                  return (
-                    <div className="space-y-2">
-                      <Label htmlFor={field.name}>Default Packages Directory *</Label>
-                      <Input
-                        id={field.name}
-                        value={field.state.value}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        onBlur={field.handleBlur}
-                        placeholder="/data/packages"
-                        aria-invalid={isInvalid}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Default directory where cloned repositories will be stored. Use absolute paths.
-                      </p>
-                      {isInvalid && field.state.meta.errors && (
-                        <p className="text-xs text-destructive">
-                          {field.state.meta.errors[0]?.message || "Invalid value"}
-                        </p>
-                      )}
-                    </div>
-                  );
-                }}
-              </form.Field>
-
               <form.Field name="default_agent_prompt">
                 {(field) => {
                   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-                  const hasCustomPrompt = field.state.value && field.state.value.trim().length > 0;
+                  const fieldValue = field.state.value ?? "";
+                  const hasCustomPrompt = typeof fieldValue === 'string' && fieldValue.trim().length > 0;
                   return (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -177,9 +145,7 @@ function SettingsComponent() {
                             onClick={async () => {
                               field.handleChange("");
                               // Auto-save when resetting
-                              const currentValues = form.state.values;
                               updateSettingsMutation.mutate({
-                                default_packages_dir: currentValues.default_packages_dir,
                                 default_agent_prompt: undefined,
                               });
                               // Remove agent from opencode.json
@@ -196,7 +162,7 @@ function SettingsComponent() {
                       </div>
                       <Textarea
                         id={field.name}
-                        value={field.state.value}
+                        value={fieldValue}
                         onChange={(e) => field.handleChange(e.target.value)}
                         onBlur={field.handleBlur}
                         placeholder="You are a helpful assistant specialized in answering questions about open-source codebases and dependencies..."

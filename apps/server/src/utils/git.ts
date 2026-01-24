@@ -148,6 +148,19 @@ export async function checkoutTag(
   }
 }
 
+export async function pullRepository(repoPath: string): Promise<{ success: boolean; error?: string }> {
+  const git = simpleGit(repoPath);
+  try {
+    await git.pull();
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 export async function getRepoPath(
   packagesDir: string,
   identifier: string,

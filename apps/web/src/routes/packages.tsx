@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CreatePackageDialog } from "@/components/dialogs/create-package-dialog";
 import { ExportPackagesDialog } from "@/components/dialogs/export-packages-dialog";
 import { ImportPackagesDialog } from "@/components/dialogs/import-packages-dialog";
-import { Plus, Loader2, Search, X, Download, Upload, Copy } from "lucide-react";
+import { Plus, Loader2, Search, X, Download, Upload, Copy, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -35,6 +35,7 @@ type FilterType = "all" | "projects" | "packages";
 
 function PackagesComponent() {
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
+  const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
   const packages = useQuery(orpc.packages.list.queryOptions());
   const queryClient = useQueryClient();
@@ -56,6 +57,24 @@ function PackagesComponent() {
       toast.error("Failed to copy package ID");
     }
   };
+
+  const updateAllMutation = useMutation(
+    orpc.packages.updateAll.mutationOptions({
+      onSuccess: (results) => {
+        const successCount = results.filter((r: any) => r.success).length;
+        const failedCount = results.length - successCount;
+
+        if (failedCount === 0) {
+          toast.success(`Successfully updated ${successCount} package(s)`);
+        } else {
+          toast.error(`Updated ${successCount} package(s), ${failedCount} failed to update`);
+        }
+
+        queryClient.invalidateQueries({ queryKey: orpc.packages.list.key() });
+        setUpdateConfirmOpen(false);
+      },
+    })
+  );
 
   // Filter packages based on storage_type
   const filteredPackages = packages.data?.filter((pkg) => {
@@ -112,6 +131,14 @@ function PackagesComponent() {
               Import
             </Button>
           </ImportPackagesDialog>
+          <Button
+            variant="outline"
+            onClick={() => setUpdateConfirmOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <RefreshCw className="size-4 mr-2" />
+            Update All
+          </Button>
           <CreatePackageDialog>
             <Button className="w-full sm:w-auto">
               <Plus className="size-4 mr-2" />
@@ -176,6 +203,32 @@ function PackagesComponent() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setScanDialogOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={updateConfirmOpen} onOpenChange={setUpdateConfirmOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Update All Packages</DialogTitle>
+            <DialogDescription>
+              This will pull the latest changes from git for all cloned packages. Local packages will be skipped.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUpdateConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => updateAllMutation.mutate(undefined)} disabled={updateAllMutation.isPending}>
+              {updateAllMutation.isPending ? (
+                <>
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Confirm Update"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

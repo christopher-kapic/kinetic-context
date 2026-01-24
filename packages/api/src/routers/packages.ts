@@ -10,7 +10,7 @@ import {
   deletePackageConfig,
   type PackageConfig,
 } from "../../../../apps/server/src/utils/config";
-import { ensureRepoCloned, ensureRepoAvailable, checkoutTag, getRepoIdentifierFromUrl, discoverGitRepositories } from "../../../../apps/server/src/utils/git";
+import { ensureRepoCloned, ensureRepoAvailable, checkoutTag, getRepoIdentifierFromUrl, discoverGitRepositories, pullRepository } from "../../../../apps/server/src/utils/git";
 import { join } from "node:path";
 import { queryOpencodeStream, type OpencodeModel } from "../../../../apps/server/src/utils/opencode";
 import { readOpencodeConfig } from "../../../../apps/server/src/utils/config";
@@ -379,6 +379,48 @@ export const packagesRouter = {
     );
     
     return suggestions;
+  }),
+
+  updateAll: publicProcedure.handler(async () => {
+    const results: Array<{
+      identifier: string;
+      display_name: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+
+    const clonedPackages = await listPackageConfigs(env.PACKAGES_DIR);
+
+    // Track pulled repos to avoid pulling the same repo multiple times
+    const pulledRepos = new Set<string>();
+
+    for (const pkg of clonedPackages) {
+      if (!pkg.urls?.git || !pkg.repo_path) continue;
+
+      const repoIdentifier = getRepoIdentifierFromUrl(pkg.urls.git);
+
+      // Skip if we already pulled this repo
+      if (pulledRepos.has(repoIdentifier)) {
+        results.push({
+          identifier: pkg.identifier,
+          display_name: pkg.display_name,
+          success: true,
+        });
+        continue;
+      }
+
+      const pullResult = await pullRepository(pkg.repo_path);
+      results.push({
+        identifier: pkg.identifier,
+        display_name: pkg.display_name,
+        success: pullResult.success,
+        error: pullResult.error,
+      });
+
+      pulledRepos.add(repoIdentifier);
+    }
+
+    return results;
   }),
 
   chat: publicProcedure

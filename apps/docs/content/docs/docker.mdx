@@ -31,6 +31,8 @@ services:
     volumes:
       - ~/.kctx/opencode/config:/config
       - ~/.kctx/opencode/state:/state
+      - ~/.kctx/packages:/packages
+      - ~/.kctx/local-packages:/local-packages
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
@@ -100,7 +102,7 @@ kinetic-context requires multiple volume mounts:
 
 ### Data Volumes
 
-Contains package repositories and project configurations:
+Contains package repositories and project configurations. **Note:** Both `kinetic-context` and `opencode` services need access to the packages volumes so that OpenCode can analyze the repository code.
 
 **Packages Volume (`/packages`):**
 ```
@@ -166,6 +168,8 @@ docker run -d \
   -p 7168:4096 \
   -v ~/.kctx/opencode/config:/config \
   -v ~/.kctx/opencode/state:/state \
+  -v ~/.kctx/packages:/packages \
+  -v ~/.kctx/local-packages:/local-packages \
   -e OPENCODE_CONFIG=/config/opencode.json \
   -e XDG_STATE_HOME=/state \
   ghcr.io/anomalyco/opencode:latest \

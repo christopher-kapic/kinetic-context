@@ -38,6 +38,8 @@ services:
     volumes:
       - ~/.kctx/opencode/config:/config
       - ~/.kctx/opencode/state:/state
+      - ~/.kctx/packages:/packages
+      - ~/.kctx/local-packages:/local-packages
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json

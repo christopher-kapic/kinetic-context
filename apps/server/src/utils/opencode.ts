@@ -15,6 +15,136 @@ function getOpencodeUrl(): string {
 }
 
 /**
+ * Helper to create a timeout promise
+ */
+function createTimeout(ms: number): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Operation timed out after ${ms}ms`)), ms);
+  });
+}
+
+/**
+ * Wrapper for fetch with timeout using AbortController
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Fetch request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Generic timeout wrapper for promises
+ */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  errorMessage?: string,
+): Promise<T> {
+  return Promise.race([
+    promise,
+    createTimeout(timeoutMs).then(() => {
+      throw new Error(errorMessage || `Operation timed out after ${timeoutMs}ms`);
+    }),
+  ]);
+}
+
+/**
+ * Poll for messages with timeout and retry logic
+ */
+async function pollForMessages(
+  opencodeUrl: string,
+  sessionId: string,
+  repoPath: string,
+  fetchTimeoutMs: number,
+  pollIntervalMs: number,
+  maxAttempts: number,
+): Promise<any> {
+  const messagesUrl = `${opencodeUrl}/session/${encodeURIComponent(sessionId)}/message?limit=5`;
+  const urlObj = new URL(messagesUrl);
+  if (repoPath) {
+    urlObj.searchParams.set("directory", encodeURIComponent(repoPath));
+  }
+  const finalUrl = urlObj.toString();
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const response = await fetchWithTimeout(
+        finalUrl,
+        {
+          headers: {
+            "x-opencode-directory": repoPath,
+          },
+        },
+        fetchTimeoutMs,
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to fetch messages: HTTP ${response.status} - ${errorText}`,
+        );
+      }
+
+      const messagesData = await response.json();
+
+      if (!Array.isArray(messagesData)) {
+        throw new Error(
+          `Invalid messages response: expected array, got ${typeof messagesData}`,
+        );
+      }
+
+      const assistantMessage = messagesData.find(
+        (msg: any) => msg.info && msg.info.role === "assistant",
+      );
+
+      if (assistantMessage?.parts?.length > 0) {
+        return assistantMessage;
+      }
+
+      // If no assistant message yet, wait and retry
+      if (attempt < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      }
+    } catch (error) {
+      // If it's a timeout or last attempt, throw
+      if (
+        error instanceof Error &&
+        error.message.includes("timed out")
+      ) {
+        throw error;
+      }
+      if (attempt === maxAttempts - 1) {
+        throw error;
+      }
+      // Otherwise, wait and retry
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+  }
+
+  throw new Error(
+    `No assistant message found after ${maxAttempts} polling attempts`,
+  );
+}
+
+/**
  * Default agent prompt for OpenCode sessions
  */
 const DEFAULT_AGENT_PROMPT = `You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:
@@ -23,7 +153,9 @@ const DEFAULT_AGENT_PROMPT = `You are an AI agent whose job is to answer questio
 2. Reference specific files, functions, or patterns in the codebase when possible
 3. Explain not just what the code does, but how to use it effectively
 4. If the question is ambiguous, ask clarifying questions
-5. Focus on helping developers understand how to integrate and use the dependency in their projects`;
+5. Focus on helping developers understand how to integrate and use the dependency in their projects
+
+IMPORTANT: The working directory for this session is set to the repository root. When executing shell commands, you should operate from this directory. If you need to change directories, use 'cd' to navigate, but remember that the repository root is your base working directory.`;
 
 export interface OpencodeModel {
   providerID: string;
@@ -78,23 +210,31 @@ export async function* queryOpencodeStream(
   if (!currentSessionId) {
     const sessionTitle = `Query: ${query.substring(0, 50)}`;
     logger.log("[opencode]", `Creating session with title: ${sessionTitle}`);
-    const sessionResult = await client.session.create({
-      body: { title: sessionTitle },
-    });
-
-    if (sessionResult.error || !sessionResult.data) {
-      const errorDetails = sessionResult.error 
-        ? JSON.stringify(sessionResult.error, null, 2)
-        : "No error object provided";
-      logger.error("[opencode]", `Session creation failed. Error details:`, errorDetails);
-      throw new Error(
-        `Failed to create opencode session: ${sessionResult.error?.message || JSON.stringify(sessionResult.error) || "Unknown error"}`,
+    try {
+      const sessionResult = await withTimeout(
+        client.session.create({
+          body: { 
+            title: sessionTitle,
+            directory: repoPath, // Set the working directory for this session
+          },
+        }),
+        env.OPENCODE_FETCH_TIMEOUT_MS,
+        `Session creation timed out after ${env.OPENCODE_FETCH_TIMEOUT_MS}ms`,
       );
-    }
 
-    currentSessionId = sessionResult.data.id;
-    logger.log("[opencode]", `Session created successfully: ${currentSessionId}`);
-    
+      if (sessionResult.error || !sessionResult.data) {
+        const errorDetails = sessionResult.error 
+          ? JSON.stringify(sessionResult.error, null, 2)
+          : "No error object provided";
+        logger.error("[opencode]", `Session creation failed. Error details:`, errorDetails);
+        throw new Error(
+          `Failed to create opencode session: ${sessionResult.error?.message || JSON.stringify(sessionResult.error) || "Unknown error"}`,
+        );
+      }
+
+      currentSessionId = sessionResult.data.id;
+      logger.log("[opencode]", `Session created successfully: ${currentSessionId}`);
+      
       // Send agent prompt as system message for new sessions
       // First try to get from opencode.json agent config, then fall back to global config
       const configPath = env.OPENCODE_CONFIG_PATH;
@@ -119,27 +259,40 @@ export async function* queryOpencodeStream(
         const globalConfig = await readGlobalConfig(dataDir);
         agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
       }
-    if (agentPrompt) {
-      logger.log("[opencode]", `Sending agent prompt to new session`);
-      try {
-        await client.session.prompt({
-          path: { id: currentSessionId },
-          body: {
-            noReply: true,
-            parts: [
-              {
-                type: "text",
-                text: agentPrompt,
+      
+      // Append working directory information to the prompt
+      const promptWithDirectory = `${agentPrompt}\n\nIMPORTANT: The repository you are analyzing is located at: ${repoPath}\nWhen executing shell commands, you should change to this directory first using 'cd ${repoPath}' before running any commands.`;
+      
+      if (agentPrompt) {
+        logger.log("[opencode]", `Sending agent prompt to new session`);
+        try {
+          await withTimeout(
+            client.session.prompt({
+              path: { id: currentSessionId },
+              body: {
+                noReply: true,
+                parts: [
+                  {
+                    type: "text",
+                    text: promptWithDirectory,
+                  },
+                ],
               },
-            ],
-          },
-        });
-        logger.log("[opencode]", `Agent prompt sent successfully`);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error("[opencode]", `Error sending agent prompt:`, errorMessage);
-        // Don't throw - continue with the query even if prompt fails
+            }),
+            env.OPENCODE_FETCH_TIMEOUT_MS,
+            `Agent prompt send timed out after ${env.OPENCODE_FETCH_TIMEOUT_MS}ms`,
+          );
+          logger.log("[opencode]", `Agent prompt sent successfully`);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.error("[opencode]", `Error sending agent prompt:`, errorMessage);
+          // Don't throw - continue with the query even if prompt fails
+        }
       }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("[opencode]", `Error during session creation:`, errorMessage);
+      throw error;
     }
   } else {
     logger.log("[opencode]", `Reusing existing session: ${currentSessionId}`);
@@ -147,7 +300,11 @@ export async function* queryOpencodeStream(
 
   try {
     // Subscribe to events before sending prompt
-    const events = await client.event.subscribe();
+    const events = await withTimeout(
+      client.event.subscribe(),
+      env.OPENCODE_FETCH_TIMEOUT_MS,
+      `Event subscription timed out after ${env.OPENCODE_FETCH_TIMEOUT_MS}ms`,
+    );
     const eventStream = events.stream;
 
     // Send prompt with optional model
@@ -180,97 +337,163 @@ export async function* queryOpencodeStream(
     let assistantMessageId: string | null = null;
     let streamComplete = false;
     let waitingForAssistant = true;
+    let lastEventTime = Date.now();
+    const heartbeatTimeoutMs = env.OPENCODE_STREAM_HEARTBEAT_MS;
 
-    for await (const event of eventStream) {
-      // Track the first assistant message that comes after we send the prompt
-      if (event.type === "message.updated" && waitingForAssistant) {
-        const messageInfo = (event as any).properties.info;
-        if (
-          messageInfo &&
-          messageInfo.sessionID === currentSessionId &&
-          messageInfo.role === "assistant"
-        ) {
-          assistantMessageId = messageInfo.id;
-          waitingForAssistant = false;
-          logger.log("[opencode]", `Found assistant message: ${assistantMessageId}`);
+    // Set up heartbeat check to detect when stream stops sending events
+    let heartbeatInterval: NodeJS.Timeout | null = null;
+    let heartbeatError: Error | null = null;
+
+    const setupHeartbeat = () => {
+      heartbeatInterval = setInterval(() => {
+        const timeSinceLastEvent = Date.now() - lastEventTime;
+        if (timeSinceLastEvent > heartbeatTimeoutMs) {
+          heartbeatError = new Error(
+            `Event stream appears to have stopped: no events received for ${heartbeatTimeoutMs}ms`,
+          );
+          if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+          }
         }
-      }
+      }, heartbeatTimeoutMs / 2); // Check at half the timeout interval
+    };
 
-      if (event.type === "message.part.updated") {
-        const part = (event as any).properties.part;
-        
-        // Only process events for our session
-        if (part.sessionID !== currentSessionId) continue;
+    setupHeartbeat();
 
-        // If we're still waiting for the assistant message, check if this part tells us
-        if (waitingForAssistant && part.messageID) {
-          // Check if part has embedded message info
-          if (part.messageInfo) {
-            if (part.messageInfo.role === "assistant") {
-              assistantMessageId = part.messageID;
-              waitingForAssistant = false;
-              logger.log("[opencode]", `Found assistant message from part: ${assistantMessageId}`);
-            } else if (part.messageInfo.role === "user") {
-              // Skip user message parts
-              continue;
+    // Set up overall timeout for the stream processing
+    const streamStartTime = Date.now();
+    const overallTimeoutMs = env.OPENCODE_TIMEOUT_MS;
+
+    try {
+      for await (const event of eventStream) {
+        // Check for overall timeout
+        const elapsed = Date.now() - streamStartTime;
+        if (elapsed > overallTimeoutMs) {
+          throw new Error(
+            `Stream processing timed out after ${overallTimeoutMs}ms`,
+          );
+        }
+
+        // Check for heartbeat error
+        if (heartbeatError) {
+          throw heartbeatError;
+        }
+
+        lastEventTime = Date.now(); // Update on each event
+
+        // Track the first assistant message that comes after we send the prompt
+        if (event.type === "message.updated" && waitingForAssistant) {
+          const messageInfo = (event as any).properties.info;
+          if (
+            messageInfo &&
+            messageInfo.sessionID === currentSessionId &&
+            messageInfo.role === "assistant"
+          ) {
+            assistantMessageId = messageInfo.id;
+            waitingForAssistant = false;
+            logger.log("[opencode]", `Found assistant message: ${assistantMessageId}`);
+          }
+        }
+
+        if (event.type === "message.part.updated") {
+          const part = (event as any).properties.part;
+
+          // Only process events for our session
+          if (part.sessionID !== currentSessionId) continue;
+
+          // If we're still waiting for the assistant message, check if this part tells us
+          if (waitingForAssistant && part.messageID) {
+            // Check if part has embedded message info
+            if (part.messageInfo) {
+              if (part.messageInfo.role === "assistant") {
+                assistantMessageId = part.messageID;
+                waitingForAssistant = false;
+                logger.log("[opencode]", `Found assistant message from part: ${assistantMessageId}`);
+              } else if (part.messageInfo.role === "user") {
+                // Skip user message parts
+                continue;
+              }
+            }
+          }
+
+          // Only process parts from the assistant message we're tracking
+          if (!assistantMessageId || part.messageID !== assistantMessageId) {
+            continue;
+          }
+
+          // Extract text from text parts
+          if (part.type === "text" && typeof part.text === "string") {
+            // Yield incremental text
+            if (part.text.length > accumulatedText.length) {
+              const newText = part.text.slice(accumulatedText.length);
+              accumulatedText = part.text;
+              yield { text: newText, done: false, sessionId: currentSessionId };
+            } else {
+              accumulatedText = part.text;
+            }
+
+            // If the part has an end time, it's complete
+            if (part.time?.end) {
+              streamComplete = true;
+              if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+              }
+              yield { text: "", done: true, sessionId: currentSessionId };
+              return;
             }
           }
         }
 
-        // Only process parts from the assistant message we're tracking
-        if (!assistantMessageId || part.messageID !== assistantMessageId) {
-          continue;
+        // Check for session errors
+        if (event.type === "session.error" || event.type === "message.error") {
+          const error = (event as any).properties.error;
+          throw new Error(
+            `Opencode error: ${error?.message || JSON.stringify(error) || "Unknown error"}`,
+          );
         }
 
-        // Extract text from text parts
-        if (part.type === "text" && typeof part.text === "string") {
-          // Yield incremental text
-          if (part.text.length > accumulatedText.length) {
-            const newText = part.text.slice(accumulatedText.length);
-            accumulatedText = part.text;
-            yield { text: newText, done: false, sessionId: currentSessionId };
-          } else {
-            accumulatedText = part.text;
-          }
-
-          // If the part has an end time, it's complete
-          if (part.time?.end) {
-            streamComplete = true;
-            yield { text: "", done: true, sessionId: currentSessionId };
-            return;
-          }
-        }
-      }
-
-      // Check for session errors
-      if (event.type === "session.error" || event.type === "message.error") {
-        const error = (event as any).properties.error;
-        throw new Error(
-          `Opencode error: ${error?.message || JSON.stringify(error) || "Unknown error"}`,
-        );
-      }
-
-      // Check if the message is complete (session updated might indicate completion)
-      if (event.type === "session.updated") {
-        const sessionInfo = (event as any).properties.info;
-        if (sessionInfo.id === currentSessionId && !streamComplete) {
-          // Give it a moment for final updates, then check if we have text
-          await new Promise(resolve => setTimeout(resolve, 500));
-          if (accumulatedText && !streamComplete) {
-            streamComplete = true;
-            yield { text: "", done: true, sessionId: currentSessionId };
-            return;
+        // Check if the message is complete (session updated might indicate completion)
+        if (event.type === "session.updated") {
+          const sessionInfo = (event as any).properties.info;
+          if (sessionInfo.id === currentSessionId && !streamComplete) {
+            // Give it a moment for final updates, then check if we have text
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            if (accumulatedText && !streamComplete) {
+              streamComplete = true;
+              if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+              }
+              yield { text: "", done: true, sessionId: currentSessionId };
+              return;
+            }
           }
         }
       }
-    }
 
-    // If we exit the loop, yield completion if we have text
-    if (accumulatedText && !streamComplete) {
-      yield { text: "", done: true, sessionId: currentSessionId };
+      // If we exit the loop, yield completion if we have text
+      if (accumulatedText && !streamComplete) {
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+          heartbeatInterval = null;
+        }
+        yield { text: "", done: true, sessionId: currentSessionId };
+      }
+    } finally {
+      // Clean up heartbeat interval
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
     }
   } catch (error) {
-    logger.error("[opencode]", `Error in queryOpencodeStream:`, error instanceof Error ? error.message : String(error));
+    logger.error(
+      "[opencode]",
+      `Error in queryOpencodeStream:`,
+      error instanceof Error ? error.message : String(error),
+    );
     if (error instanceof Error && error.stack) {
       logger.error("[opencode]", `Error stack:`, error.stack);
     }
@@ -283,9 +506,22 @@ export async function queryOpencode(
   query: string,
   sessionId?: string,
 ): Promise<{ response: string; sessionId: string }> {
+  // Wrap entire function with timeout
+  return withTimeout(
+    queryOpencodeInternal(repoPath, query, sessionId),
+    env.OPENCODE_TIMEOUT_MS,
+    `OpenCode query timed out after ${env.OPENCODE_TIMEOUT_MS}ms`,
+  );
+}
+
+async function queryOpencodeInternal(
+  repoPath: string,
+  query: string,
+  sessionId?: string,
+): Promise<{ response: string; sessionId: string }> {
   logger.log("[opencode]", `Starting query for directory: ${repoPath}`);
   logger.log("[opencode]", `Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`);
-  
+
   const opencodeUrl = getOpencodeUrl();
   logger.log("[opencode]", `Server URL: ${opencodeUrl}`);
 
@@ -325,9 +561,16 @@ export async function queryOpencode(
     const sessionTitle = `Query: ${query.substring(0, 50)}`;
     logger.log("[opencode]", `Creating session with title: ${sessionTitle}`);
     try {
-      const sessionResult = await client.session.create({
-        body: { title: sessionTitle },
-      });
+      const sessionResult = await withTimeout(
+        client.session.create({
+          body: { 
+            title: sessionTitle,
+            directory: repoPath, // Set the working directory for this session
+          },
+        }),
+        env.OPENCODE_FETCH_TIMEOUT_MS,
+        `Session creation timed out after ${env.OPENCODE_FETCH_TIMEOUT_MS}ms`,
+      );
 
       logger.log("[opencode]", `Session create result:`, {
         hasError: !!sessionResult.error,
@@ -375,21 +618,29 @@ export async function queryOpencode(
         const globalConfig = await readGlobalConfig(dataDir);
         agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
       }
+      
+      // Append working directory information to the prompt
+      const promptWithDirectory = `${agentPrompt}\n\nIMPORTANT: The repository you are analyzing is located at: ${repoPath}\nWhen executing shell commands, you should change to this directory first using 'cd ${repoPath}' before running any commands.`;
+      
       if (agentPrompt) {
         logger.log("[opencode]", `Sending agent prompt to new session`);
         try {
-          await client.session.prompt({
-            path: { id: currentSessionId },
-            body: {
-              noReply: true,
-              parts: [
-                {
-                  type: "text",
-                  text: agentPrompt,
-                },
-              ],
-            },
-          });
+          await withTimeout(
+            client.session.prompt({
+              path: { id: currentSessionId },
+              body: {
+                noReply: true,
+                parts: [
+                  {
+                    type: "text",
+                    text: promptWithDirectory,
+                  },
+                ],
+              },
+            }),
+            env.OPENCODE_FETCH_TIMEOUT_MS,
+            `Agent prompt send timed out after ${env.OPENCODE_FETCH_TIMEOUT_MS}ms`,
+          );
           logger.log("[opencode]", `Agent prompt sent successfully`);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -417,17 +668,21 @@ export async function queryOpencode(
     logger.log("[opencode]", `Sending prompt message to session ${currentSessionId}`);
     let promptResult;
     try {
-      promptResult = await client.session.prompt({
-        path: { id: currentSessionId },
-        body: {
-          parts: [
-            {
-              type: "text",
-              text: query,
-            },
-          ],
-        },
-      });
+      promptResult = await withTimeout(
+        client.session.prompt({
+          path: { id: currentSessionId },
+          body: {
+            parts: [
+              {
+                type: "text",
+                text: query,
+              },
+            ],
+          },
+        }),
+        env.OPENCODE_FETCH_TIMEOUT_MS,
+        `Prompt send timed out after ${env.OPENCODE_FETCH_TIMEOUT_MS}ms`,
+      );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error && error.stack ? error.stack : undefined;
@@ -475,80 +730,40 @@ export async function queryOpencode(
       }
     }
 
-    // If we didn't get a response immediately, wait for streaming to complete
-    // then fetch messages using direct HTTP to bypass the SDK sessionID validation bug
-    logger.log("[opencode]", `No immediate response, waiting for streaming to complete...`);
-    await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds for streaming
-
-    // Use direct HTTP request to bypass SDK bug with sessionID validation
-    const messagesUrl = `${opencodeUrl}/session/${encodeURIComponent(currentSessionId)}/message?limit=5`;
-    if (repoPath) {
-      // Add directory as query parameter if we have it
-      const encodedDir = encodeURIComponent(repoPath);
-      const urlObj = new URL(messagesUrl);
-      urlObj.searchParams.set('directory', encodedDir);
-      const finalUrl = urlObj.toString();
-      
-      logger.log("[opencode]", `Fetching messages via direct HTTP: ${finalUrl}`);
-      let response;
-      try {
-        response = await fetch(finalUrl, {
-          headers: {
-            'x-opencode-directory': repoPath, // Also set header for directory
-          },
-        });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const errorStack = error instanceof Error && error.stack ? error.stack : undefined;
-        logger.error("[opencode]", `Error during HTTP fetch for messages (URL: ${finalUrl}):`, errorMessage);
-        if (errorStack) {
-          logger.error("[opencode]", `Error stack:`, errorStack);
-        }
-        throw new Error(
-          `Failed to fetch messages from opencode (URL: ${finalUrl}): ${errorMessage}`,
-        );
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to fetch messages: HTTP ${response.status} - ${errorText}`);
-      }
-
-      const messagesData = await response.json();
-      
-      if (!Array.isArray(messagesData)) {
-        throw new Error(`Invalid messages response: expected array, got ${typeof messagesData}`);
-      }
-
-      // Find the last assistant message
-      const assistantMessage = messagesData.find(
-        (msg: any) => msg.info && msg.info.role === "assistant"
-      );
-
-      if (!assistantMessage) {
-        throw new Error(`No assistant message found in session`);
-      }
-
-      if (!assistantMessage.parts || !Array.isArray(assistantMessage.parts) || assistantMessage.parts.length === 0) {
-        throw new Error(`Assistant message has no parts`);
-      }
-
-      // Extract text parts
-      const textParts = assistantMessage.parts.filter(
-        (p: any) => p && typeof p === "object" && p.type === "text" && typeof p.text === "string"
-      );
-
-      if (textParts.length === 0) {
-        throw new Error(`Assistant message has no text parts`);
-      }
-
-      const lastTextPart = textParts[textParts.length - 1];
-      const responseText = lastTextPart.text;
-      logger.log("[opencode]", `Received response from HTTP messages (${responseText.length} characters)`);
-      return { response: responseText, sessionId: currentSessionId };
-    } else {
+    // If we didn't get a response immediately, poll for messages with timeout
+    logger.log("[opencode]", `No immediate response, polling for messages...`);
+    
+    if (!repoPath) {
       throw new Error(`Cannot fetch messages: no repository path available`);
     }
+
+    // Poll for messages with timeout and retry logic
+    const assistantMessage = await pollForMessages(
+      opencodeUrl,
+      currentSessionId,
+      repoPath,
+      env.OPENCODE_FETCH_TIMEOUT_MS,
+      env.OPENCODE_POLL_INTERVAL_MS,
+      env.OPENCODE_MAX_POLL_ATTEMPTS,
+    );
+
+    if (!assistantMessage.parts || !Array.isArray(assistantMessage.parts) || assistantMessage.parts.length === 0) {
+      throw new Error(`Assistant message has no parts`);
+    }
+
+    // Extract text parts
+    const textParts = assistantMessage.parts.filter(
+      (p: any) => p && typeof p === "object" && p.type === "text" && typeof p.text === "string"
+    );
+
+    if (textParts.length === 0) {
+      throw new Error(`Assistant message has no text parts`);
+    }
+
+    const lastTextPart = textParts[textParts.length - 1];
+    const responseText = lastTextPart.text;
+    logger.log("[opencode]", `Received response from polling (${responseText.length} characters)`);
+    return { response: responseText, sessionId: currentSessionId };
   } catch (error) {
     // Only log if error wasn't already logged with context above
     if (!(error instanceof Error && error.message.includes('opencode URL:'))) {

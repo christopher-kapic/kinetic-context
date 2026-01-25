@@ -91,6 +91,8 @@ services:
     volumes:
       - $OPencode_CONFIG_DIR:/config
       - $OPencode_STATE_DIR:/state
+      - $USER_PACKAGES_DIR:/packages
+      - $USER_LOCAL_PACKAGES_DIR:/local-packages
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json

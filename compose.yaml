@@ -8,6 +8,8 @@ services:
     volumes:
       - ./config:/config
       - ./state:/state
+      - ./packages:/packages
+      - ./local-packages:/local-packages
     command: ["serve", "--hostname=0.0.0.0"]
     environment:
       - OPENCODE_CONFIG=/config/opencode.json

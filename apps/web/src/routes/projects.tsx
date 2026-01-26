@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
@@ -6,8 +6,14 @@ import { orpc } from "@/utils/orpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CreateProjectDialog } from "@/components/dialogs/create-project-dialog";
 import { Plus, Search, Loader2 } from "lucide-react";
+
+// Lazy load dialogs for code splitting
+const CreateProjectDialog = lazy(() =>
+  import("@/components/dialogs/create-project-dialog").then((mod) => ({
+    default: mod.CreateProjectDialog,
+  }))
+);
 import {
   Dialog,
   DialogContent,
@@ -74,12 +80,14 @@ function ProjectsComponent() {
             <Search className="size-4 mr-2" />
             {scanQuery.isFetching ? "Scanning..." : "Scan Projects"}
           </Button>
-          <CreateProjectDialog>
-            <Button className="w-full sm:w-auto">
-              <Plus className="size-4 mr-2" />
-              Create Project
-            </Button>
-          </CreateProjectDialog>
+          <Suspense fallback={<Button className="w-full sm:w-auto" disabled><Plus className="size-4 mr-2" />Create Project</Button>}>
+            <CreateProjectDialog>
+              <Button className="w-full sm:w-auto">
+                <Plus className="size-4 mr-2" />
+                Create Project
+              </Button>
+            </CreateProjectDialog>
+          </Suspense>
         </div>
       </div>
 
@@ -198,12 +206,14 @@ function ProjectsComponent() {
             <p className="text-muted-foreground text-center mb-4">
               No projects yet. Create your first project to get started.
             </p>
-            <CreateProjectDialog>
-              <Button>
-                <Plus className="size-4 mr-2" />
-                Create Project
-              </Button>
-            </CreateProjectDialog>
+            <Suspense fallback={<Button disabled><Plus className="size-4 mr-2" />Create Project</Button>}>
+              <CreateProjectDialog>
+                <Button>
+                  <Plus className="size-4 mr-2" />
+                  Create Project
+                </Button>
+              </CreateProjectDialog>
+            </Suspense>
           </CardContent>
         </Card>
       )}

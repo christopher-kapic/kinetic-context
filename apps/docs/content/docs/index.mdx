@@ -46,17 +46,27 @@ Then access the web UI at [http://localhost:7167](http://localhost:7167)
 ## Features
 
 - **MCP Server** - Model Context Protocol server for dependency queries
-- **Web Interface** - Browser-based UI for managing projects and dependencies
+- **Web Interface** - Full-featured browser-based UI with:
+  - **Chat Interface** - Interactive chat for querying dependencies with conversation history
+  - **Chat History** - Persistent chat sessions stored locally in your browser
+  - **Model Management** - Configure AI providers and models for dependency queries
+  - **Settings** - Customize agent prompts and system behavior
+  - **Package Management** - Create, edit, import, and export package configurations
+  - **Project Management** - Organize dependencies across multiple projects
+  - **Project Scanning** - Automatically discover dependencies from your projects
 - **Docker Support** - Easy deployment with Docker
 - **Version Management** - Pin specific versions of dependencies per project
 - **AI Integration** - Powered by OpenCode for intelligent code analysis
+- **Conversation Continuity** - Maintain context across multiple queries using session IDs
 
 ## How It Works
 
-1. **Configure Packages** - Add package configurations to define which dependencies are available
-2. **Create Projects** - Set up projects and associate them with specific dependencies
-3. **Query Dependencies** - Use the MCP server or web UI to ask questions about dependencies
-4. **Get Answers** - OpenCode analyzes the dependency code and provides intelligent answers
+1. **Configure Packages** - Add package configurations to define which dependencies are available (via web UI or JSON files)
+2. **Create Projects** - Set up projects and associate them with specific dependencies (via web UI or JSON files)
+3. **Configure Models** - Set up AI providers and models in the Models page (web UI) or opencode.json config file
+4. **Query Dependencies** - Use the MCP server or web UI chat interface to ask questions about dependencies
+5. **Get Answers** - OpenCode analyzes the dependency code and provides intelligent answers
+6. **Continue Conversations** - Use session IDs to maintain context across multiple queries for follow-up questions
 
 ## Architecture
 

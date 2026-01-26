@@ -222,19 +222,10 @@ Available image tags on DockerHub:
 To update to the latest version:
 
 ```bash
-# Pull latest images
-docker pull christopherkapic/kinetic-context:latest
-docker pull ghcr.io/anomalyco/opencode:latest
-
-# Restart services
-docker compose -f ~/.kctx/compose.yaml restart
+kctx update
 ```
 
-Or using the kctx command:
-
-```bash
-kctx restart
-```
+This command will automatically pull the latest images for both kinetic-context and opencode, then restart the services with the new images.
 
 ## Troubleshooting
 

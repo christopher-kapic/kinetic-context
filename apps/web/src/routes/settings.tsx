@@ -51,8 +51,19 @@ function SettingsComponent() {
     })
   );
 
-  // Get agent prompt from opencode.json first, then fall back to global config
-  const agentPrompt = opencodeConfig.data?.agent || settings.data?.default_agent_prompt || "";
+  // Extract agent prompt, handling both string and object formats
+  let agentPrompt = "";
+  if (opencodeConfig.data?.agent) {
+    if (typeof opencodeConfig.data.agent === "string") {
+      agentPrompt = opencodeConfig.data.agent;
+    } else if (typeof opencodeConfig.data.agent === "object" && opencodeConfig.data.agent.default?.prompt) {
+      agentPrompt = opencodeConfig.data.agent.default.prompt;
+    }
+  }
+  // Fall back to global settings if no agent prompt found
+  if (!agentPrompt) {
+    agentPrompt = settings.data?.default_agent_prompt || "";
+  }
 
   const form = useForm<SettingsForm>({
     defaultValues: {
@@ -69,14 +80,36 @@ function SettingsComponent() {
 
       // Update opencode.json with agent prompt
       const currentConfig = opencodeConfig.data || { $schema: "https://opencode.ai/config.json", provider: {} };
-      const updatedConfig = {
-        ...currentConfig,
-        agent: value.default_agent_prompt || undefined,
-      };
-      // Remove agent field if it's empty
-      if (!value.default_agent_prompt || (typeof value.default_agent_prompt === 'string' && value.default_agent_prompt.trim().length === 0)) {
-        delete updatedConfig.agent;
+      const updatedConfig = { ...currentConfig };
+      
+      // Handle agent prompt - save to agent.default.prompt structure
+      if (value.default_agent_prompt && typeof value.default_agent_prompt === 'string' && value.default_agent_prompt.trim().length > 0) {
+        // Ensure agent object exists
+        if (!updatedConfig.agent || typeof updatedConfig.agent !== "object") {
+          updatedConfig.agent = {};
+        }
+        // Ensure default agent exists
+        if (!updatedConfig.agent.default || typeof updatedConfig.agent.default !== "object") {
+          updatedConfig.agent.default = {
+            mode: "primary",
+            tools: {
+              write: false,
+              edit: false,
+              bash: false,
+            },
+          };
+        }
+        // Update the prompt
+        updatedConfig.agent.default.prompt = value.default_agent_prompt;
+      } else {
+        // Remove agent prompt if empty, but keep agent structure if it exists
+        if (updatedConfig.agent && typeof updatedConfig.agent === "object" && updatedConfig.agent.default) {
+          delete updatedConfig.agent.default.prompt;
+          // If default agent has no other properties except mode and tools, we could remove it,
+          // but we'll keep the structure to maintain consistency
+        }
       }
+      
       updateConfigMutation.mutate({ config: updatedConfig });
     },
   });
@@ -148,10 +181,13 @@ function SettingsComponent() {
                               updateSettingsMutation.mutate({
                                 default_agent_prompt: undefined,
                               });
-                              // Remove agent from opencode.json
+                              // Remove agent prompt from opencode.json
                               const currentConfig = opencodeConfig.data || { $schema: "https://opencode.ai/config.json", provider: {} };
                               const updatedConfig = { ...currentConfig };
-                              delete updatedConfig.agent;
+                              // Remove prompt from agent.default if it exists
+                              if (updatedConfig.agent && typeof updatedConfig.agent === "object" && updatedConfig.agent.default) {
+                                delete updatedConfig.agent.default.prompt;
+                              }
                               updateConfigMutation.mutate({ config: updatedConfig });
                             }}
                             disabled={updateSettingsMutation.isPending || updateConfigMutation.isPending}

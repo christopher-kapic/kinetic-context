@@ -326,6 +326,7 @@ export const packagesRouter = {
     const config = await readOpencodeConfig(configPath);
     
     const models: Array<{ providerId: string; modelId: string; displayName: string }> = [];
+    let defaultModel: string | undefined;
     
     if (config?.provider && typeof config.provider === "object") {
       for (const [providerId, providerConfig] of Object.entries(config.provider)) {
@@ -350,7 +351,51 @@ export const packagesRouter = {
       }
     }
     
-      return models;
+    // Get default model from config.model field (format: "providerId/modelId")
+    if (config?.model && typeof config.model === "string") {
+      defaultModel = config.model;
+    }
+    
+    return {
+      models,
+      defaultModel,
+    };
+  }),
+
+  getAgentInfo: publicProcedure.handler(async () => {
+    const configPath = env.OPENCODE_CONFIG_PATH;
+    const config = await readOpencodeConfig(configPath);
+    
+    // Get default agent info from config
+    let agentInfo: {
+      name?: string;
+      description?: string;
+      prompt?: string;
+    } | null = null;
+    
+    if (config?.agent) {
+      if (typeof config.agent === "object" && config.agent.default) {
+        const defaultAgent = config.agent.default;
+        agentInfo = {
+          name: defaultAgent.description || "Default Agent",
+          description: defaultAgent.description,
+          prompt: defaultAgent.prompt,
+        };
+      } else if (typeof config.agent === "string") {
+        // Legacy format
+        agentInfo = {
+          name: "Default Agent",
+          description: undefined,
+          prompt: config.agent,
+        };
+      }
+    }
+    
+    return agentInfo || {
+      name: "Default Agent",
+      description: undefined,
+      prompt: undefined,
+    };
   }),
 
   scanProjects: publicProcedure.handler(async () => {
@@ -438,6 +483,7 @@ export const packagesRouter = {
           text: z.string(),
           done: z.boolean(),
           sessionId: z.string().optional(),
+          thinking: z.string().optional(),
         }),
       ),
     )

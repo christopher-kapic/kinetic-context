@@ -52,6 +52,19 @@ const RemoveDependencyInputSchema = z.object({
   dependencyIdentifier: z.string().min(1),
 });
 
+const UpdateDependenciesInputSchema = z.object({
+  projectIdentifier: z.string().min(1),
+  toAdd: z
+    .array(
+      z.object({
+        identifier: z.string().min(1),
+        tag: z.string().optional(),
+      })
+    )
+    .optional(),
+  toRemove: z.array(z.string().min(1)).optional(),
+});
+
 export const projectsRouter = {
   list: publicProcedure.handler(async () => {
     const projects = await listProjectConfigs(env.PROJECTS_DIR);
@@ -183,6 +196,68 @@ export const projectsRouter = {
         dependencies: project.dependencies.filter(
           (d) => d.identifier !== input.dependencyIdentifier
         ),
+      };
+
+      await writeProjectConfig(env.PROJECTS_DIR, updated);
+      return updated;
+    }),
+
+  updateDependencies: publicProcedure
+    .input(UpdateDependenciesInputSchema)
+    .handler(async ({ input }) => {
+      // Read project config once (atomic read)
+      const project = await readProjectConfig(
+        env.PROJECTS_DIR,
+        input.projectIdentifier
+      );
+      if (!project) {
+        throw new ORPCError({
+          code: "NOT_FOUND",
+          message: `Project with identifier "${input.projectIdentifier}" not found`,
+        });
+      }
+
+      // Start with current dependencies
+      let updatedDependencies = [...project.dependencies];
+
+      // Apply removals first (idempotent - ignore if not found)
+      if (input.toRemove && input.toRemove.length > 0) {
+        const removeSet = new Set(input.toRemove);
+        updatedDependencies = updatedDependencies.filter(
+          (d) => !removeSet.has(d.identifier)
+        );
+      }
+
+      // Apply additions (check for duplicates)
+      if (input.toAdd && input.toAdd.length > 0) {
+        const existingIdentifiers = new Set(
+          updatedDependencies.map((d) => d.identifier)
+        );
+        const duplicates: string[] = [];
+
+        for (const newDep of input.toAdd) {
+          if (existingIdentifiers.has(newDep.identifier)) {
+            duplicates.push(newDep.identifier);
+          } else {
+            updatedDependencies.push(newDep);
+            existingIdentifiers.add(newDep.identifier);
+          }
+        }
+
+        // If there are duplicates, throw an error with details
+        if (duplicates.length > 0) {
+          throw new ORPCError({
+            code: "CONFLICT",
+            message: `Dependencies already exist: ${duplicates.join(", ")}`,
+            data: { duplicates },
+          });
+        }
+      }
+
+      // Write updated config once (atomic write)
+      const updated: ProjectConfig = {
+        ...project,
+        dependencies: updatedDependencies,
       };
 
       await writeProjectConfig(env.PROJECTS_DIR, updated);

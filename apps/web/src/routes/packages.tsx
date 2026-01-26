@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
@@ -6,10 +6,24 @@ import { orpc } from "@/utils/orpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CreatePackageDialog } from "@/components/dialogs/create-package-dialog";
-import { ExportPackagesDialog } from "@/components/dialogs/export-packages-dialog";
-import { ImportPackagesDialog } from "@/components/dialogs/import-packages-dialog";
 import { Plus, Loader2, Search, X, Download, Upload, Copy, RefreshCw } from "lucide-react";
+
+// Lazy load dialogs for code splitting
+const CreatePackageDialog = lazy(() =>
+  import("@/components/dialogs/create-package-dialog").then((mod) => ({
+    default: mod.CreatePackageDialog,
+  }))
+);
+const ExportPackagesDialog = lazy(() =>
+  import("@/components/dialogs/export-packages-dialog").then((mod) => ({
+    default: mod.ExportPackagesDialog,
+  }))
+);
+const ImportPackagesDialog = lazy(() =>
+  import("@/components/dialogs/import-packages-dialog").then((mod) => ({
+    default: mod.ImportPackagesDialog,
+  }))
+);
 import { toast } from "sonner";
 import {
   Dialog,
@@ -119,18 +133,22 @@ function PackagesComponent() {
             <Search className="size-4 mr-2" />
             {scanQuery.isFetching ? "Scanning..." : "Scan Projects"}
           </Button>
-          <ExportPackagesDialog>
-            <Button variant="outline" className="w-full sm:w-auto">
-              <Upload className="size-4 mr-2" />
-              Export
-            </Button>
-          </ExportPackagesDialog>
-          <ImportPackagesDialog>
-            <Button variant="outline" className="w-full sm:w-auto">
-              <Download className="size-4 mr-2" />
-              Import
-            </Button>
-          </ImportPackagesDialog>
+          <Suspense fallback={<Button variant="outline" className="w-full sm:w-auto" disabled><Upload className="size-4 mr-2" />Export</Button>}>
+            <ExportPackagesDialog>
+              <Button variant="outline" className="w-full sm:w-auto">
+                <Upload className="size-4 mr-2" />
+                Export
+              </Button>
+            </ExportPackagesDialog>
+          </Suspense>
+          <Suspense fallback={<Button variant="outline" className="w-full sm:w-auto" disabled><Download className="size-4 mr-2" />Import</Button>}>
+            <ImportPackagesDialog>
+              <Button variant="outline" className="w-full sm:w-auto">
+                <Download className="size-4 mr-2" />
+                Import
+              </Button>
+            </ImportPackagesDialog>
+          </Suspense>
           <Button
             variant="outline"
             onClick={() => setUpdateConfirmOpen(true)}
@@ -139,12 +157,14 @@ function PackagesComponent() {
             <RefreshCw className="size-4 mr-2" />
             Update All
           </Button>
-          <CreatePackageDialog>
-            <Button className="w-full sm:w-auto">
-              <Plus className="size-4 mr-2" />
-              Create Package
-            </Button>
-          </CreatePackageDialog>
+          <Suspense fallback={<Button className="w-full sm:w-auto" disabled><Plus className="size-4 mr-2" />Create Package</Button>}>
+            <CreatePackageDialog>
+              <Button className="w-full sm:w-auto">
+                <Plus className="size-4 mr-2" />
+                Create Package
+              </Button>
+            </CreatePackageDialog>
+          </Suspense>
         </div>
       </div>
 
@@ -179,16 +199,18 @@ function PackagesComponent() {
                         </div>
                       </div>
                       {!repo.alreadyExists && (
-                        <CreatePackageDialog
-                          onSuccess={() => {
-                            queryClient.invalidateQueries({ queryKey: orpc.packages.list.key() });
-                            scanQuery.refetch();
-                          }}
-                        >
-                          <Button size="sm" variant="outline">
-                            Add
-                          </Button>
-                        </CreatePackageDialog>
+                        <Suspense fallback={<Button size="sm" variant="outline" disabled>Add</Button>}>
+                          <CreatePackageDialog
+                            onSuccess={() => {
+                              queryClient.invalidateQueries({ queryKey: orpc.packages.list.key() });
+                              scanQuery.refetch();
+                            }}
+                          >
+                            <Button size="sm" variant="outline">
+                              Add
+                            </Button>
+                          </CreatePackageDialog>
+                        </Suspense>
                       )}
                     </div>
                   </CardContent>
@@ -325,12 +347,14 @@ function PackagesComponent() {
             <p className="text-muted-foreground text-center mb-4">
               No packages yet. Create your first package to get started.
             </p>
-            <CreatePackageDialog>
-              <Button>
-                <Plus className="size-4 mr-2" />
-                Create Package
-              </Button>
-            </CreatePackageDialog>
+            <Suspense fallback={<Button disabled><Plus className="size-4 mr-2" />Create Package</Button>}>
+              <CreatePackageDialog>
+                <Button>
+                  <Plus className="size-4 mr-2" />
+                  Create Package
+                </Button>
+              </CreatePackageDialog>
+            </Suspense>
           </CardContent>
         </Card>
       )}

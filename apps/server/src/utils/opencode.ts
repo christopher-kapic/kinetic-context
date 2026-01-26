@@ -167,7 +167,7 @@ export async function* queryOpencodeStream(
   query: string,
   model?: OpencodeModel,
   sessionId?: string,
-): AsyncGenerator<{ text: string; done: boolean; sessionId?: string }, void, unknown> {
+): AsyncGenerator<{ text: string; done: boolean; sessionId?: string; thinking?: string }, void, unknown> {
   logger.log("[opencode]", `Starting streaming query for directory: ${repoPath}`);
   logger.log("[opencode]", `Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`);
   if (model) {
@@ -334,6 +334,8 @@ export async function* queryOpencodeStream(
 
     // Process events and yield text chunks
     let accumulatedText = "";
+    let accumulatedThinking: string[] = [];
+    let lastFullThinkingText = ""; // Track the last full thinking text to detect cumulative updates
     let assistantMessageId: string | null = null;
     let streamComplete = false;
     let waitingForAssistant = true;
@@ -367,6 +369,12 @@ export async function* queryOpencodeStream(
 
     try {
       for await (const event of eventStream) {
+        // Log all event types for investigation
+        logger.log("[opencode]", `Event type: ${event.type}`, {
+          type: event.type,
+          hasProperties: !!(event as any).properties,
+        });
+
         // Check for overall timeout
         const elapsed = Date.now() - streamStartTime;
         if (elapsed > overallTimeoutMs) {
@@ -422,13 +430,22 @@ export async function* queryOpencodeStream(
             continue;
           }
 
+          // Log part information for investigation
+          logger.log("[opencode]", `Part type: ${part.type}`, {
+            type: part.type,
+            hasText: typeof part.text === "string",
+            hasMetadata: !!part.metadata,
+            partKeys: Object.keys(part),
+          });
+
           // Extract text from text parts
           if (part.type === "text" && typeof part.text === "string") {
             // Yield incremental text
             if (part.text.length > accumulatedText.length) {
               const newText = part.text.slice(accumulatedText.length);
               accumulatedText = part.text;
-              yield { text: newText, done: false, sessionId: currentSessionId };
+              const thinkingText = accumulatedThinking.length > 0 ? accumulatedThinking.join("\n\n") : undefined;
+              yield { text: newText, done: false, sessionId: currentSessionId, thinking: thinkingText };
             } else {
               accumulatedText = part.text;
             }
@@ -440,8 +457,61 @@ export async function* queryOpencodeStream(
                 clearInterval(heartbeatInterval);
                 heartbeatInterval = null;
               }
-              yield { text: "", done: true, sessionId: currentSessionId };
+              const thinkingText = accumulatedThinking.length > 0 ? accumulatedThinking.join("\n\n") : undefined;
+              yield { text: "", done: true, sessionId: currentSessionId, thinking: thinkingText };
               return;
+            }
+          } else if (part.type === "reasoning" && typeof part.text === "string") {
+            // Capture reasoning parts - these contain the agent's thinking process
+            // Check if this is a cumulative update (starts with previous text)
+            if (lastFullThinkingText && part.text.startsWith(lastFullThinkingText)) {
+              // This is a cumulative update - replace the last entry instead of appending
+              if (accumulatedThinking.length > 0) {
+                accumulatedThinking[accumulatedThinking.length - 1] = part.text;
+              } else {
+                accumulatedThinking.push(part.text);
+              }
+            } else {
+              // New content, append it
+              accumulatedThinking.push(part.text);
+            }
+            lastFullThinkingText = part.text;
+            // Also yield the thinking update so UI can show it in real-time
+            const thinkingText = accumulatedThinking.join("\n\n");
+            yield { text: "", done: false, sessionId: currentSessionId, thinking: thinkingText };
+          } else if (part.type && part.type !== "text" && part.type !== "reasoning") {
+            // Capture other non-text parts that might contain thinking/reasoning
+            // Look for tool calls, file operations, etc.
+            const partData = JSON.stringify(part, null, 2);
+            logger.log("[opencode]", `Non-text part captured: ${part.type}`, partData);
+            
+            // Try to extract meaningful information from the part
+            if (part.type === "tool" || part.type === "tool_call" || part.type === "tool-call" || part.type === "function_call") {
+              const toolName = (part as any).tool || (part as any).name || "unknown";
+              const toolState = (part as any).state;
+              if (toolState?.status === "running") {
+                const toolInfo = `🔧 Tool: ${toolName} (running)`;
+                if (toolState?.input?.filePath) {
+                  accumulatedThinking.push(`${toolInfo}\n   Reading: ${toolState.input.filePath}`);
+                } else {
+                  accumulatedThinking.push(toolInfo);
+                }
+              } else if (toolState?.status === "completed") {
+                const toolInfo = `✅ Tool: ${toolName} (completed)`;
+                if (toolState?.input?.filePath) {
+                  accumulatedThinking.push(`${toolInfo}\n   Read: ${toolState.input.filePath}`);
+                } else {
+                  accumulatedThinking.push(toolInfo);
+                }
+              }
+              // Yield thinking update
+              const thinkingText = accumulatedThinking.join("\n\n");
+              yield { text: "", done: false, sessionId: currentSessionId, thinking: thinkingText };
+            } else if (part.type === "file" || part.type === "file_search") {
+              const fileInfo = `📁 File operation: ${(part as any).path || "unknown"}`;
+              accumulatedThinking.push(fileInfo);
+              const thinkingText = accumulatedThinking.join("\n\n");
+              yield { text: "", done: false, sessionId: currentSessionId, thinking: thinkingText };
             }
           }
         }
@@ -466,7 +536,8 @@ export async function* queryOpencodeStream(
                 clearInterval(heartbeatInterval);
                 heartbeatInterval = null;
               }
-              yield { text: "", done: true, sessionId: currentSessionId };
+              const thinkingText = accumulatedThinking.length > 0 ? accumulatedThinking.join("\n\n") : undefined;
+              yield { text: "", done: true, sessionId: currentSessionId, thinking: thinkingText };
               return;
             }
           }
@@ -479,7 +550,8 @@ export async function* queryOpencodeStream(
           clearInterval(heartbeatInterval);
           heartbeatInterval = null;
         }
-        yield { text: "", done: true, sessionId: currentSessionId };
+        const thinkingText = accumulatedThinking.length > 0 ? accumulatedThinking.join("\n\n") : undefined;
+        yield { text: "", done: true, sessionId: currentSessionId, thinking: thinkingText };
       }
     } finally {
       // Clean up heartbeat interval

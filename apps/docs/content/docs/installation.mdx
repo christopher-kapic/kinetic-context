@@ -94,7 +94,94 @@ Create `~/.kctx/bin/kctx`:
 
 ```bash
 #!/bin/bash
-docker compose -f ~/.kctx/compose.yaml "$@"
+
+set -e
+
+COMPOSE_FILE="$HOME/.kctx/compose.yaml"
+
+if [ ! -f "$COMPOSE_FILE" ]; then
+  echo "Error: compose.yaml not found at $COMPOSE_FILE"
+  echo "Please run the setup script again."
+  exit 1
+fi
+
+# Detect container runtime (docker or podman)
+if command -v docker >/dev/null 2>&1; then
+  CONTAINER_CMD="docker"
+elif command -v podman >/dev/null 2>&1; then
+  CONTAINER_CMD="podman"
+else
+  echo "Error: Neither docker nor podman is installed."
+  echo "Please install docker or podman to use kinetic-context."
+  exit 1
+fi
+
+case "${1:-start}" in
+  start)
+    echo "Starting kinetic-context..."
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" up -d
+    echo "kinetic-context is running!"
+    echo "  Web UI: http://localhost:7167"
+    echo "  OpenCode: http://localhost:7168"
+    ;;
+  stop)
+    echo "Stopping kinetic-context..."
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" stop
+    ;;
+  restart)
+    echo "Restarting kinetic-context..."
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" restart
+    ;;
+  status)
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" ps
+    ;;
+  logs)
+    SERVICE="${2:-}"
+    # Map aliases to service names
+    case "$SERVICE" in
+      kc)
+        SERVICE="kinetic-context"
+        ;;
+      oc)
+        SERVICE="opencode"
+        ;;
+    esac
+    # If no service specified, show logs from both containers
+    if [ -z "$SERVICE" ]; then
+      $CONTAINER_CMD compose -f "$COMPOSE_FILE" logs
+    else
+      $CONTAINER_CMD compose -f "$COMPOSE_FILE" logs "$SERVICE"
+    fi
+    ;;
+  down)
+    echo "Stopping and removing containers..."
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" down
+    ;;
+  update)
+    echo "Updating kinetic-context..."
+    echo "Pulling latest images..."
+    $CONTAINER_CMD pull ghcr.io/anomalyco/opencode:latest
+    $CONTAINER_CMD pull christopherkapic/kinetic-context:latest
+    echo "Restarting services with new images..."
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" up -d --force-recreate
+    echo "Update complete!"
+    ;;
+  *)
+    echo "Usage: kctx [start|stop|restart|status|logs|down|update]"
+    echo ""
+    echo "Commands:"
+    echo "  start    - Start the services (default)"
+    echo "  stop     - Stop the services"
+    echo "  restart  - Restart the services"
+    echo "  status   - Show service status"
+    echo "  logs     - Show latest logs from both containers"
+    echo "  logs kc  - Show latest logs from kinetic-context container"
+    echo "  logs oc  - Show latest logs from opencode container"
+    echo "  down     - Stop and remove containers"
+    echo "  update   - Pull latest images and restart services"
+    exit 1
+    ;;
+esac
 ```
 
 Make it executable:
@@ -111,7 +198,12 @@ docker login ghcr.io
 ### Step 6: Start Services
 
 ```bash
-kctx up -d
+kctx start
+```
+
+Or simply:
+```bash
+kctx
 ```
 
 ## Automated Installation (Alternative)
@@ -193,12 +285,10 @@ kinetic-context runs on:
 To update to the latest version:
 
 ```bash
-# Pull the latest image
-docker pull christopherkapic/kinetic-context:latest
-
-# Restart the services
-kctx restart
+kctx update
 ```
+
+This command will automatically pull the latest images for both kinetic-context and opencode, then restart the services with the new images.
 
 ## Uninstallation
 

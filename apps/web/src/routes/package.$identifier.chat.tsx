@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { z } from "zod";
 import { orpc } from "@/utils/orpc";
 import { PackageChat } from "@/components/package-chat";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,11 +9,15 @@ import { ArrowLeft, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/package/$identifier/chat")({
+  validateSearch: z.object({
+    sessionId: z.string().optional(),
+  }),
   component: PackageChatPage,
 });
 
 function PackageChatPage() {
   const { identifier } = Route.useParams();
+  const { sessionId } = Route.useSearch();
   const pkg = useQuery(orpc.packages.get.queryOptions({ input: { identifier } }));
 
   const handleCopyIdentifier = async (e: React.MouseEvent) => {
@@ -84,7 +89,7 @@ function PackageChatPage() {
       </div>
 
       <div className="h-[calc(100vh-12rem)] min-h-[600px]">
-        <PackageChat packageIdentifier={identifier} />
+        <PackageChat packageIdentifier={identifier} initialSessionId={sessionId} />
       </div>
     </div>
   );

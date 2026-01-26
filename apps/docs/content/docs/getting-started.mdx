@@ -98,12 +98,7 @@ See the [Configuration](/docs/configuration) guide for more provider options.
 
 ### Step 4: Create kctx Command
 
-Create `~/.kctx/bin/kctx`:
-
-```bash
-#!/bin/bash
-docker compose -f ~/.kctx/compose.yaml "$@"
-```
+Create `~/.kctx/bin/kctx` with the full script that includes all subcommands. See the [Installation Guide](/docs/installation#step-4-create-kctx-command) for the complete script.
 
 Make it executable:
 ```bash

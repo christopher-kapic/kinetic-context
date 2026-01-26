@@ -14,7 +14,7 @@
     "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
-    "dev:docker": "kctx down && (docker ps -a --filter 'name=kinetic-context' -q | xargs -I {} docker rm -f {} 2>/dev/null || true) && docker build -t christopherkapic/kinetic-context:latest . && kctx start"
+    "dev:docker": "./dev-docker.sh"
   },
   "dependencies": {
     "@kinetic-context/env": "workspace:*",

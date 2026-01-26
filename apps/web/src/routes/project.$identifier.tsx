@@ -1,14 +1,20 @@
+import { lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { orpc } from "@/utils/orpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AddPackageDialog } from "@/components/dialogs/add-package-dialog";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Package, ArrowLeft } from "lucide-react";
+
+// Lazy load dialogs for code splitting
+const ManagePackagesDialog = lazy(() =>
+  import("@/components/dialogs/add-package-dialog").then((mod) => ({
+    default: mod.ManagePackagesDialog,
+  }))
+);
 
 export const Route = createFileRoute("/project/$identifier")({
   component: ProjectDetailComponent,
@@ -62,6 +68,12 @@ function ProjectDetailComponent() {
   return (
     <div className="container mx-auto max-w-4xl px-4 py-6 sm:py-8">
       <div className="mb-6 sm:mb-8">
+        <Link to="/projects">
+          <Button variant="ghost" size="sm" className="mb-4">
+            <ArrowLeft className="size-4 mr-2" />
+            Back to Projects
+          </Button>
+        </Link>
         <h1 className="text-2xl sm:text-3xl font-bold">{project.data.display_name}</h1>
         <p className="text-sm sm:text-base text-muted-foreground mt-1">
           {project.data.identifier}
@@ -77,15 +89,18 @@ function ProjectDetailComponent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <AddPackageDialog
-              projectIdentifier={identifier}
-              existingPackages={packages.data || []}
-            >
-              <Button className="w-full sm:w-auto">
-                <Plus className="size-4 mr-2" />
-                Add Package
-              </Button>
-            </AddPackageDialog>
+            <Suspense fallback={<Button className="w-full sm:w-auto" disabled><Package className="size-4 mr-2" />Manage Packages</Button>}>
+              <ManagePackagesDialog
+                projectIdentifier={identifier}
+                existingPackages={packages.data || []}
+                currentDependencies={project.data.dependencies}
+              >
+                <Button className="w-full sm:w-auto">
+                  <Package className="size-4 mr-2" />
+                  Manage Packages
+                </Button>
+              </ManagePackagesDialog>
+            </Suspense>
 
             {project.data.dependencies.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">

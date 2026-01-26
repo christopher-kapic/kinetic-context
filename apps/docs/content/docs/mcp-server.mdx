@@ -57,17 +57,31 @@ Queries a specific dependency with a question. The system will use OpenCode to a
 - `dependency_identifier` (required): The identifier of the dependency to query
 - `query` (required): The question to ask about the dependency
 - `project_identifier` (optional): If provided, the system will checkout the specific tag configured for this project before querying
+- `sessionId` (optional): Session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions and conversation continuity.
 
-**Returns:** Answer to the query based on analysis of the dependency's code
+**Returns:** JSON object containing:
+- `response`: The answer to the query based on analysis of the dependency's code
+- `sessionId`: A session identifier that can be used in subsequent queries to continue the conversation
 
 **Example:**
 ```json
 {
   "dependency_identifier": "zod",
   "query": "How do I validate an email address?",
-  "project_identifier": "my-project"
+  "project_identifier": "my-project",
+  "sessionId": "optional-session-id-from-previous-query"
 }
 ```
+
+**Example Response:**
+```json
+{
+  "response": "To validate an email address with zod, you can use the `z.string().email()` method...",
+  "sessionId": "abc123-session-id"
+}
+```
+
+**Conversation Continuity:** When you provide a `sessionId` from a previous query, the system maintains context from that conversation, allowing you to ask follow-up questions like "Can you show me an example?" or "What about validation for phone numbers?"
 
 ### query_dependencies
 
@@ -77,8 +91,11 @@ Queries multiple dependencies together to understand how they work together.
 - `dependency_identifiers` (required): Array of dependency identifiers
 - `query` (required): The question about how these dependencies work together
 - `project_identifier` (optional): If provided, uses project-specific tags
+- `sessionId` (optional): Session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions and conversation continuity.
 
-**Returns:** Answer about how the dependencies work together
+**Returns:** JSON object containing:
+- `response`: The answer about how the dependencies work together
+- `sessionId`: A session identifier that can be used in subsequent queries to continue the conversation
 
 **Note:** AI agents should prefer using `query_dependency` multiple times, but this tool exists for cases where there are problems with multiple sequential calls.
 
@@ -87,7 +104,16 @@ Queries multiple dependencies together to understand how they work together.
 {
   "dependency_identifiers": ["zod", "@hookform/resolvers"],
   "query": "How do I use zod with react-hook-form?",
-  "project_identifier": "my-project"
+  "project_identifier": "my-project",
+  "sessionId": "optional-session-id-from-previous-query"
+}
+```
+
+**Example Response:**
+```json
+{
+  "response": "To use zod with react-hook-form, you can use @hookform/resolvers which provides a zodResolver...",
+  "sessionId": "abc123-session-id"
 }
 ```
 

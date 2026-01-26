@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 
@@ -5,9 +6,15 @@ import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Loader2, MessageSquare, Edit, Copy } from "lucide-react";
-import { EditPackageDialog } from "@/components/dialogs/edit-package-dialog";
+import { Loader2, MessageSquare, Edit, Copy, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+
+// Lazy load dialogs for code splitting
+const EditPackageDialog = lazy(() =>
+  import("@/components/dialogs/edit-package-dialog").then((mod) => ({
+    default: mod.EditPackageDialog,
+  }))
+);
 
 export const Route = createFileRoute("/package/$identifier")({
   component: PackageDetailComponent,
@@ -53,6 +60,12 @@ function PackageDetailComponent() {
       ) : (
         <>
           <div className="mb-6 sm:mb-8">
+            <Link to="/packages">
+              <Button variant="ghost" size="sm" className="mb-4">
+                <ArrowLeft className="size-4 mr-2" />
+                Back to Packages
+              </Button>
+            </Link>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
@@ -84,12 +97,14 @@ function PackageDetailComponent() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <EditPackageDialog identifier={pkg.data.identifier}>
-                  <Button variant="outline">
-                    <Edit className="size-4 mr-2" />
-                    Edit
-                  </Button>
-                </EditPackageDialog>
+                <Suspense fallback={<Button variant="outline" disabled><Edit className="size-4 mr-2" />Edit</Button>}>
+                  <EditPackageDialog identifier={pkg.data.identifier}>
+                    <Button variant="outline">
+                      <Edit className="size-4 mr-2" />
+                      Edit
+                    </Button>
+                  </EditPackageDialog>
+                </Suspense>
                 <Link
                   to="/package/$identifier/chat"
                   params={{ identifier: pkg.data.identifier }}

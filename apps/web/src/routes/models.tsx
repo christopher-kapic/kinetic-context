@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -6,9 +7,19 @@ import { getSafeProvider } from "@/utils/config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AddProviderDialog } from "@/components/dialogs/add-provider-dialog";
-import { EditProviderDialog } from "@/components/dialogs/edit-provider-dialog";
 import { Plus, Trash2, Settings, Brain } from "lucide-react";
+
+// Lazy load dialogs for code splitting
+const AddProviderDialog = lazy(() =>
+  import("@/components/dialogs/add-provider-dialog").then((mod) => ({
+    default: mod.AddProviderDialog,
+  }))
+);
+const EditProviderDialog = lazy(() =>
+  import("@/components/dialogs/edit-provider-dialog").then((mod) => ({
+    default: mod.EditProviderDialog,
+  }))
+);
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/models")({
@@ -77,12 +88,14 @@ function ModelsComponent() {
             Configure AI model providers and select your default model
           </p>
         </div>
-        <AddProviderDialog>
-          <Button className="w-full sm:w-auto">
-            <Plus className="size-4 mr-2" />
-            Add Provider
-          </Button>
-        </AddProviderDialog>
+        <Suspense fallback={<Button className="w-full sm:w-auto" disabled><Plus className="size-4 mr-2" />Add Provider</Button>}>
+          <AddProviderDialog>
+            <Button className="w-full sm:w-auto">
+              <Plus className="size-4 mr-2" />
+              Add Provider
+            </Button>
+          </AddProviderDialog>
+        </Suspense>
       </div>
 
       {config.isLoading ? (
@@ -160,18 +173,20 @@ function ModelsComponent() {
                             </CardDescription>
                           </div>
                           <div className="flex gap-1">
-                            <EditProviderDialog
-                              providerId={providerId}
-                              providerConfig={providerConfig}
-                            >
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
+                            <Suspense fallback={<Button variant="ghost" size="icon" className="size-8" disabled><Settings className="size-4" /></Button>}>
+                              <EditProviderDialog
+                                providerId={providerId}
+                                providerConfig={providerConfig}
                               >
-                                <Settings className="size-4" />
-                              </Button>
-                            </EditProviderDialog>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8"
+                                >
+                                  <Settings className="size-4" />
+                                </Button>
+                              </EditProviderDialog>
+                            </Suspense>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -247,12 +262,14 @@ function ModelsComponent() {
                   <p className="text-muted-foreground text-center mb-4">
                     No providers configured yet. Add your first provider to get started.
                   </p>
-                  <AddProviderDialog>
-                    <Button>
-                      <Plus className="size-4 mr-2" />
-                      Add Provider
-                    </Button>
-                  </AddProviderDialog>
+                  <Suspense fallback={<Button disabled><Plus className="size-4 mr-2" />Add Provider</Button>}>
+                    <AddProviderDialog>
+                      <Button>
+                        <Plus className="size-4 mr-2" />
+                        Add Provider
+                      </Button>
+                    </AddProviderDialog>
+                  </Suspense>
                 </CardContent>
               </Card>
             )}

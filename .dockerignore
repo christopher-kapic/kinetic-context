@@ -44,6 +44,9 @@ pnpm-debug.log*
 # Context directory (not needed in container)
 context
 
+# Documentation site (not needed in container)
+apps/docs
+
 # Turbo
 .turbo
 

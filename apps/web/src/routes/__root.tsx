@@ -3,10 +3,8 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { createORPCClient } from "@orpc/client";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { HeadContent, Outlet, createRootRouteWithContext } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
@@ -15,6 +13,35 @@ import { Toaster } from "@/components/ui/sonner";
 import { link, orpc } from "@/utils/orpc";
 
 import "../index.css";
+
+// Lazy load devtools only in development
+function Devtools() {
+  const [RouterDevtools, setRouterDevtools] = useState<React.ComponentType<any> | null>(null);
+  const [QueryDevtools, setQueryDevtools] = useState<React.ComponentType<any> | null>(null);
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      import("@tanstack/react-router-devtools").then((mod) => {
+        setRouterDevtools(mod.TanStackRouterDevtools);
+      });
+      import("@tanstack/react-query-devtools").then((mod) => {
+        setQueryDevtools(mod.ReactQueryDevtools);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!import.meta.env.DEV) {
+    return null;
+  }
+
+  return (
+    <>
+      {RouterDevtools && <RouterDevtools position="bottom-left" />}
+      {QueryDevtools && <QueryDevtools position="bottom" buttonPosition="bottom-right" />}
+    </>
+  );
+}
 
 export interface RouterAppContext {
   orpc: typeof orpc;
@@ -68,8 +95,7 @@ function RootComponent() {
         </SidebarProvider>
         <Toaster richColors />
       </ThemeProvider>
-      <TanStackRouterDevtools position="bottom-left" />
-      <ReactQueryDevtools position="bottom" buttonPosition="bottom-right" />
+      <Devtools />
     </>
   );
 }

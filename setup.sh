@@ -189,8 +189,17 @@ case "${1:-start}" in
     echo "Stopping and removing containers..."
     $CONTAINER_CMD compose -f "$COMPOSE_FILE" down
     ;;
+  update)
+    echo "Updating kinetic-context..."
+    echo "Pulling latest images..."
+    $CONTAINER_CMD pull ghcr.io/anomalyco/opencode:latest
+    $CONTAINER_CMD pull christopherkapic/kinetic-context:latest
+    echo "Restarting services with new images..."
+    $CONTAINER_CMD compose -f "$COMPOSE_FILE" up -d --force-recreate
+    echo "Update complete!"
+    ;;
   *)
-    echo "Usage: kctx [start|stop|restart|status|logs|down]"
+    echo "Usage: kctx [start|stop|restart|status|logs|down|update]"
     echo ""
     echo "Commands:"
     echo "  start    - Start the services (default)"
@@ -201,6 +210,7 @@ case "${1:-start}" in
     echo "  logs kc  - Show latest logs from kinetic-context container"
     echo "  logs oc  - Show latest logs from opencode container"
     echo "  down     - Stop and remove containers"
+    echo "  update   - Pull latest images and restart services"
     exit 1
     ;;
 esac
@@ -271,6 +281,7 @@ echo -e "  ${BLUE}kctx stop${NC}     - Stop the services"
 echo -e "  ${BLUE}kctx status${NC}   - Show service status"
 echo -e "  ${BLUE}kctx logs${NC}     - Show logs"
 echo -e "  ${BLUE}kctx down${NC}     - Stop and remove containers"
+echo -e "  ${BLUE}kctx update${NC}   - Pull latest images and restart services"
 echo ""
 
 echo -e "${GREEN}Directory Configuration:${NC}"

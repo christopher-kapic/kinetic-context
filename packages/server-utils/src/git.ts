@@ -20,8 +20,8 @@ export function getRepoIdentifierFromUrl(gitUrl: string): string {
 
   // Parse the URL to extract platform, userId, and repo
   // Format should be: platform/userId/repo (and possibly more path segments)
-  const parts = normalized.split("/").filter(p => p.length > 0);
-  
+  const parts = normalized.split("/").filter((p) => p.length > 0);
+
   if (parts.length < 3) {
     // If we can't parse it properly, fall back to a hash
     const hash = createHash("sha256").update(gitUrl).digest("hex").substring(0, 16);
@@ -116,7 +116,7 @@ export async function ensureRepoAvailable(
         `Packages directory is required for cloned repositories.`,
       );
     }
-    
+
     // Use the normalized git URL to get the shared repo location
     return await ensureRepoCloned(packagesDir, gitUrl);
   }
@@ -148,7 +148,9 @@ export async function checkoutTag(
   }
 }
 
-export async function pullRepository(repoPath: string): Promise<{ success: boolean; error?: string }> {
+export async function pullRepository(
+  repoPath: string,
+): Promise<{ success: boolean; error?: string }> {
   const git = simpleGit(repoPath);
   try {
     await git.pull();

@@ -1,18 +1,32 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
-import { useState, memo } from "react";
+import { useState, useEffect, memo } from "react";
 import { Button } from "@/components/ui/button";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   isStreaming?: boolean;
+  /** Shown in the Thinking Process dropdown. When isThinkingPhase is true, the dropdown is shown even if this is empty. */
   thinking?: string;
+  /** True while the assistant is in the thinking phase (streaming but no response text yet). Dropdown is shown immediately and stays open until this becomes false. */
+  isThinkingPhase?: boolean;
 }
 
-export const ChatMessage = memo(function ChatMessage({ role, content, isStreaming, thinking }: ChatMessageProps) {
+export const ChatMessage = memo(function ChatMessage({ role, content, isStreaming, thinking, isThinkingPhase = false }: ChatMessageProps) {
   const isUser = role === "user";
   const [isThinkingOpen, setIsThinkingOpen] = useState(false);
+
+  // Show thinking dropdown when we're in thinking phase OR when we have thinking content
+  const showThinkingDropdown = !isUser && (thinking !== undefined || isThinkingPhase);
+  // During thinking phase the dropdown is forced open; after that it follows user toggle
+  const isOpen = isThinkingPhase ? true : isThinkingOpen;
+
+  useEffect(() => {
+    if (!isThinkingPhase) {
+      setIsThinkingOpen(false);
+    }
+  }, [isThinkingPhase]);
 
   return (
     <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"} mb-4 px-1`}>
@@ -20,24 +34,24 @@ export const ChatMessage = memo(function ChatMessage({ role, content, isStreamin
         <Card className={`flex-1 min-w-0 ${isUser ? "bg-primary text-primary-foreground" : ""}`}>
           <CardContent className="p-4">
             <div className="text-sm font-medium mb-1">{isUser ? "You" : "Assistant"}</div>
-            {thinking && !isUser && (
+            {showThinkingDropdown && (
               <div className="mb-3 pb-3 border-b border-border">
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-auto p-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setIsThinkingOpen(!isThinkingOpen)}
+                  onClick={() => !isThinkingPhase && setIsThinkingOpen((prev) => !prev)}
                 >
-                  {isThinkingOpen ? (
+                  {isOpen ? (
                     <ChevronUp className="size-3 mr-1" />
                   ) : (
                     <ChevronDown className="size-3 mr-1" />
                   )}
                   <span>Thinking Process</span>
                 </Button>
-                {isThinkingOpen && (
-                  <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words font-mono bg-muted p-2 rounded">
-                    {thinking}
+                {isOpen && (
+                  <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap break-words font-mono bg-muted p-2 rounded min-h-[2rem]">
+                    {thinking ?? ""}
                   </div>
                 )}
               </div>

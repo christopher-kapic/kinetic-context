@@ -12,6 +12,10 @@ There is also a frontend that developers can access in their browsers to create 
 
 For now, there is no auth or database, since the intention is that developers will run the code locally.
 
+## Monorepo layout
+
+**Packages must not import from apps.** Dependencies flow **apps → packages**, never the other way around. Code under `packages/` is shared; code under `apps/` is app-specific. If something in a package needs logic that currently lives only in an app, move that logic into a package (e.g. a new or existing package under `packages/`) and have the app depend on it. Do not add imports from `apps/*` (or relative paths from `packages/` into `apps/`) in any package.
+
 ## Server Routes
 
 - The web app is served from the server at the root route (`/`)
@@ -25,7 +29,7 @@ The MCP server exposes the following tools for **asking usage questions about de
 
 - **list_dependencies**: Lists all available dependencies that have been configured in the system. These dependencies can then be queried using `query_dependency` to ask usage questions. Agents can use this to let a user know if they want to ask questions about a dependency that isn't configured for a project, or to get the correct package identifier.
 
-- **query_dependency**: **Ask questions about how to use a dependency.** Analyzes the dependency's source code using OpenCode to provide intelligent answers about usage patterns, APIs, and best practices. Takes a project identifier (optional), a dependency identifier (required), and a query (required). If the project identifier is specified and there is a tag for the dependency for the project, the cloned repo at `/packages/{repo}/` should checkout the specified tag before handling the query. This is for asking usage questions (e.g., "How do I validate forms with zod?"), not for querying dependency metadata.
+- **query_dependency**: **Ask questions about how to use a dependency.** Analyzes the dependency's source code using OpenCode to provide intelligent answers about usage patterns, APIs, and best practices. Takes a project identifier (optional), a dependency identifier (required), and a query (required). If the project identifier is specified and there is a tag for the dependency for the project, the cloned repo at `/packages/{repo}/` should checkout the specified tag before handling the query. This is for asking usage questions (e.g., "How do I validate forms with zod?"), not for querying dependency metadata. The default timeout is 180 seconds (3 minutes). Optional `timeout` (seconds): only set it when the user has agreed to a different timeout.
 
 **Multiple Dependencies:** If you have questions about multiple dependencies, ask each question independently using separate `query_dependency` calls. For example, if you want to understand how zod and react-hook-form work together:
 1. First ask `query_dependency` about zod: "How do I create validation schemas with zod?"
@@ -85,7 +89,7 @@ The config volume should be mounted at `/config` and contain a single file:
 
 ### OpenCode Configuration
 
-OpenCode is included in the Docker container to avoid conflicts with users' development environments. The `opencode.json` file in the config volume controls which model and provider OpenCode uses.
+OpenCode is included in the Docker container to avoid conflicts with users' development environments. The `opencode.json` file in the config volume controls which model and provider OpenCode uses. The opencode service is run with `OPENCODE_DISABLE_DEFAULT_PLUGINS=true` so default plugins are not loaded.
 
 Example `opencode.json` for OpenRouter:
 

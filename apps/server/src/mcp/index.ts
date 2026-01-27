@@ -7,10 +7,11 @@ import {
   listProjectConfigs,
   readPackageConfig,
   readProjectConfig,
+  ensureRepoAvailable,
+  checkoutTag,
+  queryOpencode,
   type PackageConfig,
-} from "../utils/config.js";
-import { ensureRepoAvailable, checkoutTag } from "../utils/git.js";
-import { queryOpencode } from "../utils/opencode.js";
+} from "@kinetic-context/server-utils";
 
 export function createMcpServer(): McpServer {
   const mcpServer = new McpServer(
@@ -127,7 +128,7 @@ export function createMcpServer(): McpServer {
   // Tool: query_dependency
   mcpServer.tool(
     "query_dependency",
-    "Ask questions about how to use a dependency. Analyzes the dependency's source code using OpenCode to provide intelligent answers about usage patterns, APIs, and best practices. This is for asking usage questions (e.g., 'How do I validate forms with zod?'), not for querying dependency metadata. If you have multiple questions about different dependencies, ask each question independently using separate query_dependency calls. Call list_dependencies first to ensure the correct package identifier is used.",
+    "Ask questions about how to use a dependency. Analyzes the dependency's source code using OpenCode to provide intelligent answers about usage patterns, APIs, and best practices. This is for asking usage questions (e.g., 'How do I validate forms with zod?'), not for querying dependency metadata. The default timeout is 180 seconds (3 minutes). Only adjust the timeout when the user explicitly agrees. If you have multiple questions about different dependencies, ask each question independently using separate query_dependency calls. Call list_dependencies first to ensure the correct package identifier is used.",
     {
       project_identifier: z
         .string()
@@ -145,12 +146,19 @@ export function createMcpServer(): McpServer {
         .describe(
           "Optional session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions.",
         ),
+      timeout: z
+        .number()
+        .optional()
+        .describe(
+          "Optional timeout in seconds. Default is 180 (3 minutes). Only set this if the user has agreed to a different timeout.",
+        ),
     },
     async ({
       project_identifier,
       dependency_identifier,
       query,
       sessionId,
+      timeout,
     }): Promise<CallToolResult> => {
       try {
         // Get package config
@@ -202,7 +210,8 @@ export function createMcpServer(): McpServer {
         }
 
         // Query opencode
-        const result = await queryOpencode(repoPath, query, sessionId);
+        const timeoutMs = timeout != null ? timeout * 1000 : undefined;
+        const result = await queryOpencode(repoPath, query, sessionId, timeoutMs);
 
         return {
           content: [

@@ -1,10 +1,9 @@
 import { publicProcedure } from "../index";
 import { env } from "@kinetic-context/env/server";
-// Note: These imports use relative paths because server utils aren't in a package
 import {
   listProjectConfigs,
   listPackageConfigs,
-} from "../../../../apps/server/src/utils/config";
+} from "@kinetic-context/server-utils";
 
 export const statsRouter = {
   get: publicProcedure.handler(async () => {

@@ -2,18 +2,24 @@ import { z } from "zod";
 import { ORPCError, eventIterator } from "@orpc/server";
 import { publicProcedure } from "../index";
 import { env } from "@kinetic-context/env/server";
-// Note: These imports use relative paths because server utils aren't in a package
 import {
   listPackageConfigs,
   readPackageConfig,
   writePackageConfig,
   deletePackageConfig,
+  readOpencodeConfig,
+  ensureRepoCloned,
+  ensureRepoAvailable,
+  checkoutTag,
+  getRepoIdentifierFromUrl,
+  getDefaultBranch,
+  discoverGitRepositories,
+  pullRepository,
+  queryOpencodeStream,
   type PackageConfig,
-} from "../../../../apps/server/src/utils/config";
-import { ensureRepoCloned, ensureRepoAvailable, checkoutTag, getRepoIdentifierFromUrl, discoverGitRepositories, pullRepository } from "../../../../apps/server/src/utils/git";
+  type OpencodeModel,
+} from "@kinetic-context/server-utils";
 import { join } from "node:path";
-import { queryOpencodeStream, type OpencodeModel } from "../../../../apps/server/src/utils/opencode";
-import { readOpencodeConfig } from "../../../../apps/server/src/utils/config";
 
 // In-memory clone status tracking
 const cloneStatus = new Map<
@@ -114,11 +120,8 @@ async function cloneRepository(
     
     // If defaultTag is "auto", detect the default branch
     if (defaultTag === "auto") {
-      const { getDefaultBranch, checkoutTag } = await import("../../../../apps/server/src/utils/git");
-      const { writePackageConfig, readPackageConfig } = await import("../../../../apps/server/src/utils/config");
-      
       const detectedBranch = await getDefaultBranch(actualRepoPath);
-      
+
       // Update the package config with the detected branch
       const pkg = await readPackageConfig(env.PACKAGES_DIR, identifier);
       if (pkg) {
@@ -127,17 +130,15 @@ async function cloneRepository(
         pkg.repo_path = actualRepoPath;
         await writePackageConfig(env.PACKAGES_DIR, pkg);
       }
-      
+
       // Checkout the detected branch
       await checkoutTag(actualRepoPath, detectedBranch);
     } else if (defaultTag) {
       // Checkout the specified tag/branch
-      const { checkoutTag } = await import("../../../../apps/server/src/utils/git");
       await checkoutTag(actualRepoPath, defaultTag);
     }
-    
+
     // Update the package config with the actual repo path (in case it was different)
-    const { writePackageConfig, readPackageConfig } = await import("../../../../apps/server/src/utils/config");
     const pkg = await readPackageConfig(env.PACKAGES_DIR, identifier);
     if (pkg && pkg.repo_path !== actualRepoPath) {
       pkg.repo_path = actualRepoPath;

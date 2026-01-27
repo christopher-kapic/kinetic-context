@@ -59,7 +59,7 @@ Create an `opencode.json` config file in the `config` directory (see [OpenCode C
 
 **Note:** For local development, you'll need a running opencode instance. You can either:
 - Use Docker Compose to run opencode: `docker compose up opencode -d` (uses the `compose.yaml` in the root), then set `OPENCODE_URL=http://localhost:7168` in your `.env` file
-- Run opencode via Docker directly: `docker run -d -p 7168:4096 -v $(pwd)/config:/config -v $(pwd)/data:/data ghcr.io/anomalyco/opencode:latest serve --hostname=0.0.0.0`
+- Run opencode via Docker directly: `docker run -d -p 7168:4096 -v $(pwd)/config:/config -v $(pwd)/data:/data -e OPENCODE_DISABLE_DEFAULT_PLUGINS=true ghcr.io/anomalyco/opencode:latest serve --hostname=0.0.0.0`
 - Run opencode locally if you have it set up
 
 Then, run the development server:
@@ -228,6 +228,7 @@ services:
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
       - XDG_STATE_HOME=/state
+      - OPENCODE_DISABLE_DEFAULT_PLUGINS=true
     restart: unless-stopped
 
   kinetic-context:

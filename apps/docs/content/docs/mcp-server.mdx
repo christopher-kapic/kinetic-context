@@ -75,6 +75,7 @@ Lists all available dependencies that have been configured in the system. These 
 - `query` (required): The question to ask about how to use the dependency
 - `project_identifier` (optional): If provided, the system will checkout the specific tag configured for this project before querying
 - `sessionId` (optional): Session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions and conversation continuity.
+- `timeout` (optional): Timeout in seconds. Default is 180 (3 minutes). Only set this if the user has agreed to a different timeout.
 
 **Returns:** JSON object containing:
 - `response`: The answer to the query based on analysis of the dependency's source code

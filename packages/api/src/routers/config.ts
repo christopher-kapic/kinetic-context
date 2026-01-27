@@ -3,7 +3,6 @@ import { ORPCError } from "@orpc/server";
 import { publicProcedure } from "../index";
 import { env } from "@kinetic-context/env/server";
 import { dirname } from "node:path";
-// Note: These imports use relative paths because server utils aren't in a package
 import {
   readOpencodeConfig,
   writeOpencodeConfig,
@@ -11,7 +10,7 @@ import {
   writeGlobalConfig,
   type OpencodeConfig,
   type GlobalConfig,
-} from "../../../../apps/server/src/utils/config";
+} from "@kinetic-context/server-utils";
 
 // List of well-known providers for UI autocomplete
 const WELL_KNOWN_PROVIDERS = [
@@ -166,6 +165,141 @@ export const configRouter = {
           code: "INTERNAL_SERVER_ERROR",
           message: error instanceof Error ? error.message : "Failed to fetch models from OpenCode Zen",
         });
+      }
+    }),
+
+  startGithubCopilotAuth: publicProcedure
+    .input(
+      z.object({
+        enterpriseUrl: z.string().url().optional().or(z.literal("")),
+      }),
+    )
+    .handler(async () => {
+      const opencodeUrl = env.OPENCODE_URL;
+      const timeoutMs = env.OPENCODE_FETCH_TIMEOUT_MS;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const response = await fetch(
+          `${opencodeUrl}/provider/github-copilot/oauth/authorize`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ method: 0 }),
+            signal: controller.signal,
+          },
+        );
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`OpenCode auth failed: ${response.status} ${response.statusText}${text ? ` - ${text}` : ""}`);
+        }
+        const data = (await response.json()) as { url?: string; instructions?: string };
+        const url = typeof data.url === "string" ? data.url : "";
+        const instructions = typeof data.instructions === "string" ? data.instructions : "Enter the code shown in OpenCode.";
+        return { url, instructions };
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new ORPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "OpenCode server request timed out",
+          });
+        }
+        throw new ORPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "GitHub Copilot auth not available",
+        });
+      }
+    }),
+
+  completeGithubCopilotAuth: publicProcedure.handler(async () => {
+    const opencodeUrl = env.OPENCODE_URL;
+    const timeoutMs = Math.max(env.OPENCODE_FETCH_TIMEOUT_MS, 120_000);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const response = await fetch(
+        `${opencodeUrl}/provider/github-copilot/oauth/callback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: 0 }),
+          signal: controller.signal,
+        },
+      );
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`OpenCode callback failed: ${response.status} ${response.statusText}${text ? ` - ${text}` : ""}`);
+      }
+      const result = await response.json();
+      return { success: result === true };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new ORPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Authentication timed out. Complete the device flow on GitHub and try again.",
+        });
+      }
+      throw new ORPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: error instanceof Error ? error.message : "GitHub Copilot auth failed",
+      });
+    }
+  }),
+
+  fetchGithubCopilotModels: publicProcedure
+    .input(
+      z.object({
+        enterpriseUrl: z.string().url().optional().or(z.literal("")),
+      }),
+    )
+    .handler(async () => {
+      const opencodeUrl = env.OPENCODE_URL;
+      const timeoutMs = env.OPENCODE_FETCH_TIMEOUT_MS;
+
+      // Curated list from https://docs.github.com/en/copilot/reference/ai-models/supported-models
+      // Maintained from upstream docs when OpenCode does not return models.
+      const FALLBACK_COPILOT_MODELS = [
+        { id: "gpt-5.2-codex", name: "GPT-5.2-Codex" },
+        { id: "gpt-5.1-codex", name: "GPT-5.1-Codex" },
+        { id: "gpt-5.1-codex-max", name: "GPT-5.1-Codex-Max" },
+        { id: "gpt-5.1-codex-mini", name: "GPT-5.1-Codex-Mini" },
+        { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
+        { id: "claude-opus-4-5", name: "Claude Opus 4.5" },
+        { id: "claude-haiku-4-5", name: "Claude Haiku 4.5" },
+        { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
+        { id: "grok-code-fast-1", name: "Grok Code Fast 1" },
+      ];
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const response = await fetch(`${opencodeUrl}/provider`, {
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+          return { models: FALLBACK_COPILOT_MODELS };
+        }
+        const data = (await response.json()) as {
+          all?: Array<{ id?: string; models?: Record<string, { name?: string }> }>;
+        };
+        const all = data.all ?? [];
+        const copilot = all.find((p) => p.id === "github-copilot");
+        if (copilot?.models && typeof copilot.models === "object") {
+          const models = Object.entries(copilot.models).map(([id, meta]) => ({
+            id,
+            name: meta?.name ?? id,
+          }));
+          if (models.length > 0) {
+            return { models };
+          }
+        }
+        return { models: FALLBACK_COPILOT_MODELS };
+      } catch {
+        return { models: FALLBACK_COPILOT_MODELS };
       }
     }),
 };

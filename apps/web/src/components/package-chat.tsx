@@ -241,14 +241,11 @@ export function PackageChat({ packageIdentifier, initialSessionId }: PackageChat
             accumulatedText += event.text;
           }
           
-          // Update thinking if this event has it
+          // Update thinking if this event has it — always set state so the thinking UI
+          // appears and updates as chunks arrive, not only when the ref happens to differ
           if (event.thinking !== undefined) {
             latestThinking = event.thinking;
-            // Immediately update thinking state for real-time streaming
-            // This ensures thinking updates appear even when there's no text
-            if (latestThinking !== currentStreamingThinkingRef.current) {
-              setCurrentStreamingThinking(latestThinking);
-            }
+            setCurrentStreamingThinking(latestThinking);
           }
           
           // Update conversation ID if we got one
@@ -300,9 +297,8 @@ export function PackageChat({ packageIdentifier, initialSessionId }: PackageChat
           setCurrentStreamingText(accumulatedText);
         }
         
-        // Also update thinking state after processing all events
-        // (in case it wasn't updated in the loop for any reason)
-        if (latestThinking !== currentStreamingThinkingRef.current) {
+        // Ensure thinking state is set after processing all new events
+        if (latestThinking !== undefined) {
           setCurrentStreamingThinking(latestThinking);
         }
         
@@ -537,6 +533,7 @@ export function PackageChat({ packageIdentifier, initialSessionId }: PackageChat
                 content={currentStreamingText}
                 isStreaming={true}
                 thinking={showThinking ? currentStreamingThinking : undefined}
+                isThinkingPhase={false}
               />
             )}
             {isStreaming && !currentStreamingText && (
@@ -544,7 +541,8 @@ export function PackageChat({ packageIdentifier, initialSessionId }: PackageChat
                 role="assistant"
                 content=""
                 isStreaming={true}
-                thinking={showThinking ? currentStreamingThinking : undefined}
+                thinking={showThinking ? (currentStreamingThinking ?? "") : undefined}
+                isThinkingPhase={showThinking}
               />
             )}
             <div ref={messagesEndRef} />

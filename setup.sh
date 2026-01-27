@@ -97,6 +97,7 @@ services:
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
       - XDG_STATE_HOME=/state
+      - OPENCODE_DISABLE_DEFAULT_PLUGINS=true
     restart: unless-stopped
 
   kinetic-context:

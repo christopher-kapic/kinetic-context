@@ -1,0 +1,22 @@
+{
+  "name": "@kinetic-context/server-utils",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsc -b"
+  },
+  "dependencies": {
+    "@kinetic-context/env": "workspace:*",
+    "@opencode-ai/sdk": "^1.1.14",
+    "simple-git": "^3.30.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@kinetic-context/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

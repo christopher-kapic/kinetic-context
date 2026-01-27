@@ -16,7 +16,7 @@ import { createMcpServer } from "./mcp/index.js";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { logger as appLogger } from "./utils/logger.js";
+import { logger as appLogger } from "@kinetic-context/server-utils";
 
 const app = new Hono();
 

@@ -37,6 +37,7 @@ services:
     environment:
       - OPENCODE_CONFIG=/config/opencode.json
       - XDG_STATE_HOME=/state # separate state volume for persistence
+      - OPENCODE_DISABLE_DEFAULT_PLUGINS=true
     restart: unless-stopped
 
   kinetic-context:
@@ -159,7 +160,7 @@ services:
 
 ## Running with Docker Run
 
-If you prefer `docker run` instead of Docker Compose:
+If you prefer `docker run` instead of Docker Compose, use the commands below. The opencode container uses `OPENCODE_DISABLE_DEFAULT_PLUGINS=true` so OpenCode's default plugins are not loaded when used with kinetic-context.
 
 ```bash
 # Start opencode
@@ -172,6 +173,7 @@ docker run -d \
   -v ~/.kctx/local-packages:/local-packages \
   -e OPENCODE_CONFIG=/config/opencode.json \
   -e XDG_STATE_HOME=/state \
+  -e OPENCODE_DISABLE_DEFAULT_PLUGINS=true \
   ghcr.io/anomalyco/opencode:latest \
   serve --hostname=0.0.0.0
 

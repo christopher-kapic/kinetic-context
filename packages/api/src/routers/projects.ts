@@ -3,17 +3,15 @@ import { ORPCError } from "@orpc/server";
 import { publicProcedure } from "../index";
 import type { Context } from "../context";
 import { env } from "@kinetic-context/env/server";
-// Note: These imports use relative paths because server utils aren't in a package
-// In a real scenario, these would be in a shared package
 import {
   listProjectConfigs,
   readProjectConfig,
   writeProjectConfig,
   deleteProjectConfig,
+  discoverGitRepositories,
   type ProjectConfig,
   type ProjectDependency,
-} from "../../../../apps/server/src/utils/config";
-import { discoverGitRepositories } from "../../../../apps/server/src/utils/git";
+} from "@kinetic-context/server-utils";
 
 const CreateProjectInputSchema = z.object({
   identifier: z.string().min(1),

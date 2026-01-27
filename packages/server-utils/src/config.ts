@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir, unlink } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { z } from "zod";
 import { getRepoIdentifierFromUrl } from "./git";
-import { logger } from "./logger.js";
+import { logger } from "./logger";
 
 // Legacy package config schema (before storage_type and repo_path were added)
 const LegacyPackageConfigSchema = z.object({
@@ -66,28 +66,28 @@ export async function readPackageConfig(
     const configPath = join(packagesDir, `${identifier}.json`);
     const content = await readFile(configPath, "utf-8");
     const parsed = JSON.parse(content);
-    
+
     // Try new schema first
     const newSchemaResult = PackageConfigSchema.safeParse(parsed);
     if (newSchemaResult.success) {
       return newSchemaResult.data;
     }
-    
+
     // Try legacy schema and migrate if found
     const legacyResult = LegacyPackageConfigSchema.safeParse(parsed);
     if (legacyResult.success) {
       logger.log("[config]", `Migrating legacy package config: ${identifier}`);
       const legacy = legacyResult.data;
-      
+
       // Get default packages directory for migration
       const dataDir = dirname(packagesDir) || "/data";
       const globalConfig = await readGlobalConfig(dataDir);
       const defaultPackagesDir = globalConfig.default_packages_dir;
-      
+
       // Use normalized git URL to determine repo path (allows sharing between packages)
       const repoIdentifier = getRepoIdentifierFromUrl(legacy.urls.git);
       const repoPath = join(defaultPackagesDir, repoIdentifier);
-      
+
       // Migrate to new format
       const migrated: PackageConfig = {
         identifier: legacy.identifier,
@@ -98,14 +98,14 @@ export async function readPackageConfig(
         default_tag: legacy.default_tag,
         urls: legacy.urls,
       };
-      
+
       // Write migrated config back to disk
       await writePackageConfig(packagesDir, migrated);
       logger.log("[config]", `Successfully migrated package config: ${identifier}`);
-      
+
       return migrated;
     }
-    
+
     // Neither schema matched - only log if not silent
     if (!silent) {
       logger.error("[config]", `Failed to parse package config ${identifier}: Invalid schema`);
@@ -154,11 +154,11 @@ export async function listPackageConfigs(
 
     async function scanDirectory(dir: string, prefix: string = ""): Promise<void> {
       const entries = await readdir(dir);
-      
+
       for (const entry of entries) {
         const fullPath = join(dir, entry);
         const stats = await stat(fullPath);
-        
+
         if (stats.isDirectory()) {
           // Skip git repositories (cloned repos)
           if (await isGitRepository(fullPath)) {
@@ -216,7 +216,7 @@ export async function writePackageConfig(
 ): Promise<void> {
   await mkdir(packagesDir, { recursive: true });
   const configPath = join(packagesDir, `${config.identifier}.json`);
-  
+
   // If identifier contains '/', we need to create nested directories
   // e.g., @tanstack/ai.json needs @tanstack/ directory
   const pathParts = config.identifier.split("/");
@@ -226,7 +226,7 @@ export async function writePackageConfig(
     const nestedDir = join(packagesDir, ...dirParts);
     await mkdir(nestedDir, { recursive: true });
   }
-  
+
   await writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
 }
 
@@ -311,7 +311,8 @@ export async function readOpencodeConfig(
         agent: {
           default: {
             mode: "primary",
-            prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+            prompt:
+              "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
             tools: {
               write: false,
               edit: false,
@@ -331,7 +332,8 @@ export async function readOpencodeConfig(
         agent: {
           default: {
             mode: "primary",
-            prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+            prompt:
+              "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
             tools: {
               write: false,
               edit: false,
@@ -341,28 +343,37 @@ export async function readOpencodeConfig(
         },
       };
     }
-    
+
     // Clean up provider structure if it exists
     if (parsed.provider) {
-      const cleanedProvider: Record<string, any> = {};
+      const cleanedProvider: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(parsed.provider)) {
         // Only include valid provider objects
-        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        if (
+          typeof value === "object" &&
+          value !== null &&
+          !Array.isArray(value)
+        ) {
           cleanedProvider[key] = value;
         }
         // Skip invalid entries (strings, arrays, null, etc.)
       }
       parsed.provider = cleanedProvider;
     }
-    
+
     // Ensure default agent exists if agent config is missing or doesn't have default
-    if (!parsed.agent || typeof parsed.agent !== "object" || !parsed.agent.default) {
+    if (
+      !parsed.agent ||
+      typeof parsed.agent !== "object" ||
+      !parsed.agent.default
+    ) {
       if (!parsed.agent) {
         parsed.agent = {};
       }
       parsed.agent.default = {
         mode: "primary",
-        prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+        prompt:
+          "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
         tools: {
           write: false,
           edit: false,
@@ -370,7 +381,7 @@ export async function readOpencodeConfig(
         },
       };
     }
-    
+
     return parsed as OpencodeConfig;
   } catch (error) {
     // If parsing fails, return default
@@ -381,7 +392,8 @@ export async function readOpencodeConfig(
         agent: {
           default: {
             mode: "primary",
-            prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+            prompt:
+              "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
             tools: {
               write: false,
               edit: false,
@@ -413,15 +425,23 @@ export async function writeOpencodeConfig(
   const validated = { ...config };
   if (validated.provider) {
     logger.log("[config]", `Processing providers:`, Object.keys(validated.provider));
-    const cleanedProvider: Record<string, any> = {};
+    const cleanedProvider: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(validated.provider)) {
       // Only include valid provider objects
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
         cleanedProvider[key] = value;
         logger.log("[config]", `Keeping valid provider '${key}'`);
       } else {
         // Log skipped invalid entries for debugging
-        logger.log("[config]", `Skipping invalid provider entry '${key}': expected object, got ${typeof value}`, value);
+        logger.log(
+          "[config]",
+          `Skipping invalid provider entry '${key}': expected object, got ${typeof value}`,
+          value,
+        );
       }
     }
     validated.provider = cleanedProvider;
@@ -438,13 +458,18 @@ export async function writeOpencodeConfig(
   }
 
   // Ensure default agent exists if agent config is missing or doesn't have default
-  if (!validated.agent || typeof validated.agent !== "object" || !validated.agent.default) {
+  if (
+    !validated.agent ||
+    typeof validated.agent !== "object" ||
+    !validated.agent.default
+  ) {
     if (!validated.agent) {
       validated.agent = {};
     }
     validated.agent.default = {
       mode: "primary",
-      prompt: "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+      prompt:
+        "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
       tools: {
         write: false,
         edit: false,

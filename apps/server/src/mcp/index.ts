@@ -28,7 +28,7 @@ export function createMcpServer(): McpServer {
   // Tool: list_project_dependencies
   mcpServer.tool(
     "list_project_dependencies",
-    "Lists the dependencies for a project",
+    "Lists the dependencies configured for a project. These dependencies can be queried using query_dependency to ask usage questions about how to use them.",
     {
       project_identifier: z.string().describe("The project identifier"),
     },
@@ -86,7 +86,7 @@ export function createMcpServer(): McpServer {
   // Tool: list_dependencies
   mcpServer.tool(
     "list_dependencies",
-    "Lists all available dependencies",
+    "Lists all available dependencies that have been configured in the system. These dependencies can be queried using query_dependency to ask usage questions about how to use them.",
     {},
     async (): Promise<CallToolResult> => {
       try {
@@ -127,7 +127,7 @@ export function createMcpServer(): McpServer {
   // Tool: query_dependency
   mcpServer.tool(
     "query_dependency",
-    "Queries a dependency to answer questions about how to use it. Call list_dependencies first to ensure the correct package identifier is used.",
+    "Ask questions about how to use a dependency. Analyzes the dependency's source code using OpenCode to provide intelligent answers about usage patterns, APIs, and best practices. This is for asking usage questions (e.g., 'How do I validate forms with zod?'), not for querying dependency metadata. If you have multiple questions about different dependencies, ask each question independently using separate query_dependency calls. Call list_dependencies first to ensure the correct package identifier is used.",
     {
       project_identifier: z
         .string()
@@ -138,7 +138,7 @@ export function createMcpServer(): McpServer {
       dependency_identifier: z
         .string()
         .describe("The dependency identifier to query"),
-      query: z.string().describe("The question to ask about the dependency"),
+      query: z.string().describe("The question to ask about how to use the dependency"),
       sessionId: z
         .string()
         .optional()
@@ -225,144 +225,6 @@ export function createMcpServer(): McpServer {
             {
               type: "text",
               text: `Error querying dependency: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  // Tool: query_dependencies
-  mcpServer.tool(
-    "query_dependencies",
-    "Queries multiple dependencies to answer questions about how they work together",
-    {
-      project_identifier: z
-        .string()
-        .optional()
-        .describe(
-          "Optional project identifier. If provided and the project has tags for these dependencies, those tags will be checked out before querying",
-        ),
-      dependency_identifiers: z
-        .array(z.string())
-        .describe("List of dependency identifiers to query"),
-      query: z
-        .string()
-        .describe(
-          "The question to ask about how the dependencies work together",
-        ),
-      sessionId: z
-        .string()
-        .optional()
-        .describe(
-          "Optional session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions.",
-        ),
-    },
-    async ({
-      project_identifier,
-      dependency_identifiers,
-      query,
-      sessionId,
-    }): Promise<CallToolResult> => {
-      try {
-        // Get all package configs
-        const packageConfigs: PackageConfig[] = [];
-        for (const identifier of dependency_identifiers) {
-          const config = await readPackageConfig(
-            env.PACKAGES_DIR,
-            identifier,
-          );
-          if (!config) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Dependency "${identifier}" not found`,
-                },
-              ],
-              isError: true,
-            };
-          }
-          packageConfigs.push(config);
-        }
-
-        // Get project config if provided
-        let project = null;
-        if (project_identifier) {
-          project = await readProjectConfig(
-            env.PROJECTS_DIR,
-            project_identifier,
-          );
-        }
-
-        // Ensure all repos are available and checked out to correct tags (only for cloned)
-        const repoPaths: string[] = [];
-        for (let i = 0; i < packageConfigs.length; i++) {
-          const config = packageConfigs[i];
-          const identifier = dependency_identifiers[i];
-
-          // Determine tag (only for cloned repos)
-          let tag = config.default_tag;
-          if (project) {
-            const dep = project.dependencies.find(
-              (d) => d.identifier === identifier,
-            );
-            if (dep?.tag) {
-              tag = dep.tag;
-            }
-          }
-
-          // Ensure repo is available (cloned or local)
-          const repoPath = await ensureRepoAvailable(
-            config.repo_path,
-            config.storage_type,
-            config.urls.git,
-            env.PACKAGES_DIR,
-          );
-
-          // Only checkout tag for cloned repos
-          if (config.storage_type === "cloned" && tag) {
-            await checkoutTag(repoPath, tag);
-          }
-
-          repoPaths.push(repoPath);
-        }
-
-        // Build query with context about all repos
-        const repoContext = repoPaths
-          .map((path, i) => `${dependency_identifiers[i]}: ${path}`)
-          .join("\n");
-
-        const fullQuery = `${query}\n\nRepository paths:\n${repoContext}`;
-
-        // Query opencode with the first repo as primary context
-        // In a more sophisticated implementation, we might combine all repos
-        const result = await queryOpencode(repoPaths[0], fullQuery, sessionId);
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  response: result.response,
-                  sessionId: result.sessionId,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error querying dependencies: ${
                 error instanceof Error ? error.message : String(error)
               }`,
             },

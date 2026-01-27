@@ -7,6 +7,10 @@ description: Complete API and MCP tools reference
 
 Complete reference for the kinetic-context API and MCP server tools.
 
+## About kinetic-context Tools
+
+**Important:** kinetic-context tools are designed for **asking usage questions about dependencies** by analyzing their source code. They are not for querying dependency metadata (like package.json contents). The system uses OpenCode to analyze the actual source code of dependencies and provide intelligent answers about usage patterns, APIs, and best practices.
+
 ## MCP Server Endpoint
 
 **Base URL**: `http://localhost:7167/mcp`
@@ -17,7 +21,9 @@ All MCP tools are accessible through this endpoint using the Model Context Proto
 
 ### list_project_dependencies
 
-Lists all dependencies configured for a specific project.
+Lists all dependencies configured for a specific project. These dependencies can then be queried using `query_dependency` to ask usage questions about how to use them.
+
+**Note:** This tool lists which dependencies are configured for a project. To ask questions about how to use these dependencies, use `query_dependency` instead.
 
 #### Parameters
 
@@ -66,7 +72,12 @@ Array<{
 
 ### list_dependencies
 
-Lists all available dependencies that have been configured in the system.
+Lists all available dependencies that have been configured in the system. These dependencies can then be queried using `query_dependency` to ask usage questions about how to use them.
+
+**Use cases:**
+- See what dependencies are available to ask questions about
+- Get the correct package identifier to use with `query_dependency`
+- Inform users if they want to ask about a dependency that isn't configured for their project
 
 #### Parameters
 
@@ -74,10 +85,14 @@ None
 
 #### Returns
 
-Array of package identifiers:
+Array of package objects with identifiers, display names, and package managers:
 
 ```typescript
-string[]
+Array<{
+  identifier: string;
+  display_name: string;
+  package_manager: string;
+}>
 ```
 
 #### Example Request
@@ -104,14 +119,16 @@ string[]
 
 ### query_dependency
 
-Queries a specific dependency with a question. The system analyzes the dependency's code using OpenCode and provides an intelligent answer.
+**Ask questions about how to use a dependency.** This tool analyzes the dependency's source code using OpenCode to provide intelligent answers about usage patterns, APIs, and best practices.
+
+**Important:** This tool is for asking **usage questions** (e.g., "How do I validate forms with zod?"), not for querying dependency metadata (like package.json contents). The system analyzes the actual source code of the dependency to answer your questions.
 
 #### Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `dependency_identifier` | string | Yes | The identifier of the dependency to query |
-| `query` | string | Yes | The question to ask about the dependency |
+| `dependency_identifier` | string | Yes | The identifier of the dependency to query (use `list_dependencies` to find the correct identifier) |
+| `query` | string | Yes | The question to ask about how to use the dependency |
 | `project_identifier` | string | No | If provided, uses the project-specific tag for this dependency |
 | `sessionId` | string | No | Optional session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions. |
 
@@ -146,71 +163,32 @@ JSON object containing:
 
 #### Behavior
 
-1. If `project_identifier` is provided:
+1. **Source Code Analysis**: The system clones the dependency repository (if not already available) and analyzes the actual source code using OpenCode.
+
+2. If `project_identifier` is provided:
    - Looks up the project configuration
    - Finds the dependency in the project's dependencies
    - Checks out the specified tag (if different from default)
    - Queries at that specific version
 
-2. If `project_identifier` is not provided:
+3. If `project_identifier` is not provided:
    - Uses the package's `default_tag`
    - Queries the dependency at the default version
 
-3. If `sessionId` is provided:
+4. If `sessionId` is provided:
    - Continues the conversation from the previous session
    - Maintains context from earlier queries in the same session
    - Allows for follow-up questions and clarifications
 
----
+#### Multiple Dependencies
 
-### query_dependencies
+If you have questions about multiple dependencies, ask each question independently using separate `query_dependency` calls. For example, if you want to understand how zod and react-hook-form work together:
 
-Queries multiple dependencies together to understand how they work together.
+1. First ask about zod: `query_dependency` with query "How do I create validation schemas with zod?"
+2. Then ask about react-hook-form: `query_dependency` with query "How do I integrate validation with react-hook-form?"
+3. If needed, ask follow-up questions to either dependency using the same `sessionId` to maintain context
 
-#### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `dependency_identifiers` | string[] | Yes | Array of dependency identifiers to query together |
-| `query` | string | Yes | The question about how these dependencies work together |
-| `project_identifier` | string | No | If provided, uses project-specific tags for all dependencies |
-| `sessionId` | string | No | Optional session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions. |
-
-#### Returns
-
-JSON object containing:
-- `response` (string): The answer about how the dependencies work together
-- `sessionId` (string): A session identifier that can be used in subsequent queries to continue the conversation
-
-#### Example Request
-
-```json
-{
-  "tool": "query_dependencies",
-  "parameters": {
-    "dependency_identifiers": ["zod", "@hookform/resolvers"],
-    "query": "How do I use zod with react-hook-form for form validation?",
-    "project_identifier": "my-project",
-    "sessionId": "optional-session-id-from-previous-query"
-  }
-}
-```
-
-#### Example Response
-
-```json
-{
-  "response": "To use zod with react-hook-form, you can use @hookform/resolvers which provides a zodResolver:\n\n```typescript\nimport { useForm } from 'react-hook-form';\nimport { zodResolver } from '@hookform/resolvers/zod';\nimport { z } from 'zod';\n\nconst schema = z.object({\n  email: z.string().email(),\n  password: z.string().min(8)\n});\n\nconst { register, handleSubmit } = useForm({\n  resolver: zodResolver(schema)\n});\n```\n\nThis integrates zod validation with react-hook-form's form handling.",
-  "sessionId": "abc123-session-id"
-}
-```
-
-#### Notes
-
-- AI agents should prefer using `query_dependency` multiple times for better results
-- This tool is useful when you need to understand interactions between dependencies
-- All dependencies must be configured before querying
-- Use the returned `sessionId` in subsequent queries to maintain conversation context
+This approach provides better results than trying to ask about multiple dependencies in a single query.
 
 ---
 

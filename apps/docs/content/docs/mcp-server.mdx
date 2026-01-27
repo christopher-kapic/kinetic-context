@@ -5,11 +5,21 @@ description: Model Context Protocol server documentation
 
 # MCP Server
 
-kinetic-context exposes a Model Context Protocol (MCP) server that AI coding tools can connect to for querying dependency information.
+kinetic-context exposes a Model Context Protocol (MCP) server that AI coding tools can connect to for **asking usage questions about dependencies**. 
+
+## What is kinetic-context?
+
+kinetic-context is designed to help AI agents answer questions about **how to use dependencies** by analyzing their source code. It's not for querying dependency metadata (like package.json contents), but rather for asking questions like:
+
+- "How do I validate forms with zod?"
+- "What's the best way to use react-hook-form with TypeScript?"
+- "How do I integrate zod with react-hook-form?"
+
+The system clones dependency repositories and uses [OpenCode](https://github.com/opencode-dev/opencode) to analyze the actual source code and provide intelligent answers based on the implementation.
 
 ## What is MCP?
 
-The Model Context Protocol (MCP) is a protocol that enables AI assistants to securely access external data sources and tools. kinetic-context implements an MCP server that provides information about open-source dependencies.
+The Model Context Protocol (MCP) is a protocol that enables AI assistants to securely access external data sources and tools. kinetic-context implements an MCP server that provides information about open-source dependencies by analyzing their source code.
 
 ## Server Endpoint
 
@@ -25,7 +35,7 @@ The MCP server provides the following tools:
 
 ### list_project_dependencies
 
-Lists all dependencies configured for a specific project.
+Lists all dependencies configured for a specific project. These dependencies can then be queried using `query_dependency` to ask usage questions about how to use them.
 
 **Parameters:**
 - `project_identifier` (required): The identifier of the project (must match a project config file name)
@@ -39,35 +49,42 @@ Lists all dependencies configured for a specific project.
 }
 ```
 
+**Note:** This tool lists which dependencies are configured for a project. To ask questions about how to use these dependencies, use `query_dependency` instead.
+
 ### list_dependencies
 
-Lists all available dependencies that have been configured in the system.
+Lists all available dependencies that have been configured in the system. These dependencies can then be queried using `query_dependency` to ask usage questions about how to use them.
 
 **Parameters:** None
 
-**Returns:** Array of all package identifiers
+**Returns:** Array of all package identifiers with their display names and package managers
 
-**Use case:** AI agents can use this to inform users if they want to ask about a dependency that isn't configured for their project.
+**Use case:** AI agents can use this to:
+- See what dependencies are available to ask questions about
+- Inform users if they want to ask about a dependency that isn't configured for their project
+- Get the correct package identifier to use with `query_dependency`
 
 ### query_dependency
 
-Queries a specific dependency with a question. The system will use OpenCode to analyze the dependency's code and provide an answer.
+**Ask questions about how to use a dependency.** This tool analyzes the dependency's source code using OpenCode to provide intelligent answers about usage patterns, APIs, and best practices.
+
+**Important:** This tool is for asking **usage questions** (e.g., "How do I validate forms with zod?"), not for querying dependency metadata (like package.json contents). The system analyzes the actual source code of the dependency to answer your questions.
 
 **Parameters:**
-- `dependency_identifier` (required): The identifier of the dependency to query
-- `query` (required): The question to ask about the dependency
+- `dependency_identifier` (required): The identifier of the dependency to query (use `list_dependencies` to find the correct identifier)
+- `query` (required): The question to ask about how to use the dependency
 - `project_identifier` (optional): If provided, the system will checkout the specific tag configured for this project before querying
 - `sessionId` (optional): Session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions and conversation continuity.
 
 **Returns:** JSON object containing:
-- `response`: The answer to the query based on analysis of the dependency's code
+- `response`: The answer to the query based on analysis of the dependency's source code
 - `sessionId`: A session identifier that can be used in subsequent queries to continue the conversation
 
 **Example:**
 ```json
 {
   "dependency_identifier": "zod",
-  "query": "How do I validate an email address?",
+  "query": "How do I validate an email address with zod?",
   "project_identifier": "my-project",
   "sessionId": "optional-session-id-from-previous-query"
 }
@@ -76,46 +93,17 @@ Queries a specific dependency with a question. The system will use OpenCode to a
 **Example Response:**
 ```json
 {
-  "response": "To validate an email address with zod, you can use the `z.string().email()` method...",
+  "response": "To validate an email address with zod, you can use the `z.string().email()` method:\n\n```typescript\nimport { z } from 'zod';\n\nconst emailSchema = z.string().email();\n\nconst result = emailSchema.parse('user@example.com');\n```\n\nThis will validate that the string is a valid email format according to RFC 5322.",
   "sessionId": "abc123-session-id"
 }
 ```
 
 **Conversation Continuity:** When you provide a `sessionId` from a previous query, the system maintains context from that conversation, allowing you to ask follow-up questions like "Can you show me an example?" or "What about validation for phone numbers?"
 
-### query_dependencies
-
-Queries multiple dependencies together to understand how they work together.
-
-**Parameters:**
-- `dependency_identifiers` (required): Array of dependency identifiers
-- `query` (required): The question about how these dependencies work together
-- `project_identifier` (optional): If provided, uses project-specific tags
-- `sessionId` (optional): Session ID to continue a previous conversation. If provided, the query will be added to the existing session, allowing for follow-up questions and conversation continuity.
-
-**Returns:** JSON object containing:
-- `response`: The answer about how the dependencies work together
-- `sessionId`: A session identifier that can be used in subsequent queries to continue the conversation
-
-**Note:** AI agents should prefer using `query_dependency` multiple times, but this tool exists for cases where there are problems with multiple sequential calls.
-
-**Example:**
-```json
-{
-  "dependency_identifiers": ["zod", "@hookform/resolvers"],
-  "query": "How do I use zod with react-hook-form?",
-  "project_identifier": "my-project",
-  "sessionId": "optional-session-id-from-previous-query"
-}
-```
-
-**Example Response:**
-```json
-{
-  "response": "To use zod with react-hook-form, you can use @hookform/resolvers which provides a zodResolver...",
-  "sessionId": "abc123-session-id"
-}
-```
+**Multiple Dependencies:** If you have questions about multiple dependencies, ask each question independently using separate `query_dependency` calls. For example, if you want to understand how zod and react-hook-form work together, you can:
+1. First ask `query_dependency` about zod: "How do I create validation schemas with zod?"
+2. Then ask `query_dependency` about react-hook-form: "How do I integrate validation with react-hook-form?"
+3. If needed, ask follow-up questions to either dependency using the same `sessionId` to maintain context
 
 ## Connecting AI Tools
 
@@ -154,7 +142,7 @@ http://localhost:7167/mcp
 
 ## Project Identifier Matching
 
-When using `query_dependency` or `query_dependencies` with a `project_identifier`, the system will:
+When using `query_dependency` with a `project_identifier`, the system will:
 
 1. Look up the project configuration
 2. Find the dependency in the project's dependencies list

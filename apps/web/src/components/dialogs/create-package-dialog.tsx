@@ -69,20 +69,37 @@ const createPackageSchema = z.object({
 
 type CreatePackageForm = z.infer<typeof createPackageSchema>;
 
+export type PrefillFromScan = {
+  path: string;
+  suggestedIdentifier: string;
+};
+
 interface CreatePackageDialogProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   onSuccess?: () => void;
   onCancel?: () => void;
+  /** When opening from "Scan Projects", prefill form with this repo. Implies storage_type local. */
+  prefillFromScan?: PrefillFromScan | null;
+  /** Controlled open state (e.g. when used from scan dialog). When set, children are not used as trigger. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function CreatePackageDialog({
   children,
   onSuccess,
   onCancel,
+  prefillFromScan,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: CreatePackageDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [identifier, setIdentifier] = useState<string | null>(null);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const [identifierState, setIdentifierState] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const isControlled = controlledOpen !== undefined && controlledOnOpenChange !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? controlledOnOpenChange! : setInternalOpen;
 
   const mutation = useMutation(
     orpc.packages.create.mutationOptions({
@@ -90,7 +107,7 @@ export function CreatePackageDialog({
         queryClient.invalidateQueries({ queryKey: orpc.packages.list.key() });
         queryClient.invalidateQueries({ queryKey: orpc.stats.get.key() });
         toast.success("Package created successfully");
-        setIdentifier(data.identifier);
+        setIdentifierState(data.identifier);
         setOpen(false);
         form.reset();
         onSuccess?.();
@@ -104,9 +121,9 @@ export function CreatePackageDialog({
   // Poll clone status if package was created
   const cloneStatus = useQuery({
     ...orpc.packages.getCloneStatus.queryOptions({
-      input: { identifier: identifier! },
+      input: { identifier: identifierState! },
     }),
-    enabled: !!identifier,
+    enabled: !!identifierState,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "pending" || status === "cloning" ? 2000 : false;
@@ -153,11 +170,27 @@ export function CreatePackageDialog({
     },
   });
 
+  // When opening from scan prefill, show local UI immediately (avoid flash of Git URL)
+  const effectiveStorageType =
+    open && prefillFromScan ? "local" : form.state.values.storage_type;
+
+  // When dialog opens with prefillFromScan, set form to local + path + identifier/display name
   useEffect(() => {
     if (!open) {
-      setIdentifier(null);
+      setIdentifierState(null);
+      return;
     }
-  }, [open]);
+    if (prefillFromScan) {
+      const dirName = prefillFromScan.suggestedIdentifier;
+      form.setFieldValue("storage_type", "local");
+      form.setFieldValue("repo_path", prefillFromScan.path);
+      form.setFieldValue("identifier", dirName.toLowerCase());
+      form.setFieldValue("display_name", dirName);
+      form.setFieldValue("git", "");
+      form.setFieldValue("default_tag_auto", false);
+      form.setFieldValue("default_tag", "");
+    }
+  }, [open, prefillFromScan]);
 
   const handleCancel = () => {
     setOpen(false);
@@ -165,13 +198,16 @@ export function CreatePackageDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(newOpen) => {
-      setOpen(newOpen);
-      if (!newOpen) {
-        handleCancel();
-      }
-    }}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+    <Dialog
+      open={open}
+      onOpenChange={(newOpen) => {
+        setOpen(newOpen);
+        if (!newOpen) {
+          handleCancel();
+        }
+      }}
+    >
+      {!isControlled && children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Create Package</DialogTitle>
@@ -179,7 +215,7 @@ export function CreatePackageDialog({
             Create a new package configuration. Choose to clone a repository or use an existing one.
           </DialogDescription>
         </DialogHeader>
-        {identifier && cloneStatus.data?.status && (
+        {identifierState && cloneStatus.data?.status && (
           <div className="p-3 bg-muted rounded-none text-sm">
             Clone status: {cloneStatus.data.status}
             {cloneStatus.data.status === "cloning" && " (this may take a while...)"}
@@ -305,7 +341,7 @@ export function CreatePackageDialog({
             }}
           </form.Field>
 
-          {form.state.values.storage_type === "local" ? (
+          {effectiveStorageType === "local" ? (
             <form.Field name="repo_path">
               {(field) => {
                 const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
@@ -320,9 +356,16 @@ export function CreatePackageDialog({
                       placeholder="/path/to/repository"
                       aria-invalid={isInvalid}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Absolute path to an existing git repository on your machine
-                    </p>
+                    {prefillFromScan && (
+                      <p className="text-xs text-muted-foreground font-mono break-all" title={prefillFromScan.path}>
+                        Full path: {prefillFromScan.path}
+                      </p>
+                    )}
+                    {!prefillFromScan && (
+                      <p className="text-xs text-muted-foreground">
+                        Absolute path to an existing git repository on your machine
+                      </p>
+                    )}
                     {isInvalid && field.state.meta.errors && (
                       <p className="text-xs text-destructive">
                         {field.state.meta.errors[0]?.message || "Invalid value"}

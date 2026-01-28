@@ -47,8 +47,16 @@ export const Route = createFileRoute("/packages")({
 
 type FilterType = "all" | "projects" | "packages";
 
+type ScanRepo = {
+  path: string;
+  relativePath: string;
+  suggestedIdentifier: string;
+  alreadyExists: boolean;
+};
+
 function PackagesComponent() {
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
+  const [selectedScanRepo, setSelectedScanRepo] = useState<ScanRepo | null>(null);
   const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
   const packages = useQuery(orpc.packages.list.queryOptions());
@@ -199,18 +207,13 @@ function PackagesComponent() {
                         </div>
                       </div>
                       {!repo.alreadyExists && (
-                        <Suspense fallback={<Button size="sm" variant="outline" disabled>Add</Button>}>
-                          <CreatePackageDialog
-                            onSuccess={() => {
-                              queryClient.invalidateQueries({ queryKey: orpc.packages.list.key() });
-                              scanQuery.refetch();
-                            }}
-                          >
-                            <Button size="sm" variant="outline">
-                              Add
-                            </Button>
-                          </CreatePackageDialog>
-                        </Suspense>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedScanRepo(repo)}
+                        >
+                          Add
+                        </Button>
                       )}
                     </div>
                   </CardContent>
@@ -229,6 +232,25 @@ function PackagesComponent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Suspense fallback={null}>
+        <CreatePackageDialog
+          open={!!selectedScanRepo}
+          onOpenChange={(open) => {
+            if (!open) setSelectedScanRepo(null);
+          }}
+          prefillFromScan={
+            selectedScanRepo
+              ? { path: selectedScanRepo.path, suggestedIdentifier: selectedScanRepo.suggestedIdentifier }
+              : null
+          }
+          onSuccess={() => {
+            setSelectedScanRepo(null);
+            queryClient.invalidateQueries({ queryKey: orpc.packages.list.key() });
+            scanQuery.refetch();
+          }}
+        />
+      </Suspense>
 
       <Dialog open={updateConfirmOpen} onOpenChange={setUpdateConfirmOpen}>
         <DialogContent className="sm:max-w-[400px]">

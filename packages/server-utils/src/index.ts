@@ -7,6 +7,7 @@ export {
   pullRepository,
   getRepoPath,
   getDefaultBranch,
+  listBranches,
   discoverGitRepositories,
 } from "./git";
 export {

@@ -210,6 +210,45 @@ export async function getDefaultBranch(repoPath: string): Promise<string> {
 }
 
 /**
+ * List branches for a repository with the default branch first.
+ * Used when selecting branch for a cloned package in project dependencies.
+ */
+export async function listBranches(
+  repoPath: string,
+): Promise<{ defaultBranch: string; branches: string[] }> {
+  const defaultBranch = await getDefaultBranch(repoPath);
+  const git = simpleGit(repoPath);
+
+  const branchSet = new Set<string>();
+
+  // Local branches
+  const local = await git.branchLocal();
+  for (const name of local.all) {
+    branchSet.add(name);
+  }
+
+  // Remote branches (normalize origin/branch -> branch)
+  try {
+    const remote = await git.branch(["-r"]);
+    for (const name of remote.all) {
+      const normalized = name.startsWith("origin/")
+        ? name.replace(/^origin\//, "")
+        : name.replace(/^remotes\/origin\//, "");
+      if (normalized && normalized !== "HEAD") {
+        branchSet.add(normalized);
+      }
+    }
+  } catch {
+    // Ignore if remote branches unavailable
+  }
+
+  const rest = Array.from(branchSet).filter((b) => b !== defaultBranch).sort();
+  const branches = defaultBranch ? [defaultBranch, ...rest] : rest;
+
+  return { defaultBranch, branches };
+}
+
+/**
  * Recursively scan a directory for git repositories.
  * Returns an array of discovered repository paths.
  */

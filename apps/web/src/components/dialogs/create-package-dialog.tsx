@@ -120,8 +120,8 @@ export function CreatePackageDialog({
       display_name: "",
       storage_type: "cloned",
       repo_path: "",
-      default_tag_auto: false,
-      default_tag: "main",
+      default_tag_auto: true,
+      default_tag: "",
       git: "",
       website: "",
       docs: "",
@@ -282,7 +282,8 @@ export function CreatePackageDialog({
                         form.setFieldValue("default_tag_auto", false);
                         form.setFieldValue("default_tag", "");
                       } else {
-                        form.setFieldValue("default_tag", "main");
+                        form.setFieldValue("default_tag_auto", true);
+                        form.setFieldValue("default_tag", "");
                       }
                     }}
                   >

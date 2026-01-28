@@ -61,6 +61,14 @@ const UpdateDependenciesInputSchema = z.object({
     )
     .optional(),
   toRemove: z.array(z.string().min(1)).optional(),
+  toUpdate: z
+    .array(
+      z.object({
+        identifier: z.string().min(1),
+        tag: z.string().optional(),
+      })
+    )
+    .optional(),
 });
 
 export const projectsRouter = {
@@ -250,6 +258,18 @@ export const projectsRouter = {
             data: { duplicates },
           });
         }
+      }
+
+      // Apply tag updates to existing dependencies
+      if (input.toUpdate && input.toUpdate.length > 0) {
+        const updateByIdentifier = new Map(
+          input.toUpdate.map((u) => [u.identifier, u.tag]),
+        );
+        updatedDependencies = updatedDependencies.map((d) => {
+          if (!updateByIdentifier.has(d.identifier)) return d;
+          const tag = updateByIdentifier.get(d.identifier);
+          return { ...d, tag };
+        });
       }
 
       // Write updated config once (atomic write)

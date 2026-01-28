@@ -13,6 +13,7 @@ import {
   checkoutTag,
   getRepoIdentifierFromUrl,
   getDefaultBranch,
+  listBranches,
   discoverGitRepositories,
   pullRepository,
   queryOpencodeStream,
@@ -223,6 +224,12 @@ export const packagesRouter = {
       }
 
       const storageType = input.storage_type;
+      // For cloned repos, default to "auto" (detect default branch) when not specified
+      const defaultTag =
+        input.storage_type === "cloned" &&
+        (input.default_tag === undefined || input.default_tag === "")
+          ? "auto"
+          : input.default_tag;
 
       const pkg: PackageConfig = {
         identifier: input.identifier,
@@ -230,7 +237,7 @@ export const packagesRouter = {
         display_name: input.display_name,
         storage_type: storageType,
         repo_path: repoPath,
-        default_tag: input.default_tag,
+        default_tag: defaultTag,
         urls: input.urls,
       };
 
@@ -240,7 +247,7 @@ export const packagesRouter = {
       // Start async clone only for cloned repos (don't await)
       if (input.storage_type === "cloned" && input.urls.git) {
         cloneStatus.set(input.identifier, "pending");
-        cloneRepository(input.identifier, repoPath, input.urls.git, input.default_tag).catch(
+        cloneRepository(input.identifier, repoPath, input.urls.git, defaultTag).catch(
           (error) => {
             console.error(`Background clone failed for ${input.identifier}:`, error);
           }
@@ -320,6 +327,28 @@ export const packagesRouter = {
     .handler(async ({ input }) => {
       const status = cloneStatus.get(input.identifier) ?? "completed";
       return { status };
+    }),
+
+  getBranches: publicProcedure
+    .input(z.object({ identifier: z.string() }))
+    .handler(async ({ input }) => {
+      const found = await findPackageConfig(input.identifier);
+      if (!found || found.config.storage_type !== "cloned") {
+        return { defaultBranch: "", branches: [] };
+      }
+      const pkg = found.config;
+      const packagesDir = getPackagesDir(pkg.storage_type);
+      const repoPath = await ensureRepoAvailable(
+        pkg.repo_path,
+        pkg.storage_type,
+        pkg.urls?.git,
+        packagesDir,
+      );
+      try {
+        return await listBranches(repoPath);
+      } catch {
+        return { defaultBranch: "", branches: [] };
+      }
     }),
 
   getAvailableModels: publicProcedure.handler(async () => {

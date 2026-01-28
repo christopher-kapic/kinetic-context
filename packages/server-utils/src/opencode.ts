@@ -808,3 +808,33 @@ export async function generateKctxHelperIfNeeded(
     );
   }
 }
+
+/**
+ * Regenerate kctx_helper for a package by asking OpenCode for a repo summary and writing it to the package config.
+ * Always runs (unlike generateKctxHelperIfNeeded). Uses 3x default timeout. Throws on error.
+ */
+export async function regenerateKctxHelper(
+  packagesDir: string,
+  identifier: string,
+  repoPath: string,
+): Promise<void> {
+  const config = await readPackageConfig(packagesDir, identifier, true);
+  if (!config) {
+    throw new Error(`Package not found: ${identifier}`);
+  }
+  const timeoutMs = env.OPENCODE_TIMEOUT_MS * 3;
+  logger.log("[opencode]", `Regenerating kctx_helper for ${identifier} (timeout ${timeoutMs}ms)`);
+  const result = await queryOpencode(
+    repoPath,
+    KCTX_HELPER_SUMMARY_PROMPT,
+    undefined,
+    timeoutMs,
+    undefined,
+  );
+  const updated = await readPackageConfig(packagesDir, identifier, true);
+  if (!updated) {
+    throw new Error(`Package config disappeared: ${identifier}`);
+  }
+  await writePackageConfig(packagesDir, { ...updated, kctx_helper: result.response });
+  logger.log("[opencode]", `Saved kctx_helper for ${identifier}`);
+}

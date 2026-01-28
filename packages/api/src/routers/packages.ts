@@ -17,6 +17,7 @@ import {
   discoverGitRepositories,
   pullRepository,
   queryOpencodeStream,
+  regenerateKctxHelper,
   type PackageConfig,
   type OpencodeModel,
 } from "@kinetic-context/server-utils";
@@ -575,6 +576,38 @@ export const packagesRouter = {
         throw new ORPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: error instanceof Error ? error.message : "Failed to query package",
+        });
+      }
+    }),
+
+  remakeKctxHelper: publicProcedure
+    .input(z.object({ identifier: z.string() }))
+    .handler(async ({ input }) => {
+      const found = await findPackageConfig(input.identifier);
+      if (!found) {
+        throw new ORPCError({
+          code: "NOT_FOUND",
+          message: `Package with identifier "${input.identifier}" not found`,
+        });
+      }
+      const pkg = found.config;
+      const packagesDir = getPackagesDir(pkg.storage_type);
+      const repoPath = await ensureRepoAvailable(
+        pkg.repo_path,
+        pkg.storage_type,
+        pkg.urls?.git,
+        packagesDir,
+      );
+      if (pkg.storage_type === "cloned" && pkg.default_tag) {
+        await checkoutTag(repoPath, pkg.default_tag);
+      }
+      try {
+        await regenerateKctxHelper(packagesDir, input.identifier, repoPath);
+        return { success: true };
+      } catch (error) {
+        throw new ORPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "Failed to regenerate kctx_helper",
         });
       }
     }),

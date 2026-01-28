@@ -33,5 +33,6 @@ export {
   queryOpencodeStream,
   queryOpencode,
   generateKctxHelperIfNeeded,
+  regenerateKctxHelper,
   type OpencodeModel,
 } from "./opencode";

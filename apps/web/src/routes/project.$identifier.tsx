@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { orpc } from "@/utils/orpc";
@@ -23,9 +23,23 @@ export const Route = createFileRoute("/project/$identifier")({
 function ProjectDetailComponent() {
   const { identifier } = Route.useParams();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const project = useQuery(orpc.projects.get.queryOptions({ input: { identifier } }));
   const packages = useQuery(orpc.packages.list.queryOptions());
+
+  const deleteProjectMutation = useMutation(
+    orpc.projects.delete.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.projects.list.key() });
+        toast.success("Project deleted");
+        navigate({ to: "/projects" });
+      },
+      onError: (error: any) => {
+        toast.error(error.message || "Failed to delete project");
+      },
+    })
+  );
 
   const removeDependencyMutation = useMutation(
     orpc.projects.removeDependency.mutationOptions({
@@ -65,15 +79,32 @@ function ProjectDetailComponent() {
     }
   };
 
+  const handleDeleteProject = () => {
+    if (confirm(`Delete project "${project.data?.display_name}"? This cannot be undone.`)) {
+      deleteProjectMutation.mutate({ identifier });
+    }
+  };
+
   return (
     <div className="container mx-auto max-w-4xl px-4 py-6 sm:py-8">
       <div className="mb-6 sm:mb-8">
-        <Link to="/projects">
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="size-4 mr-2" />
-            Back to Projects
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <Link to="/projects">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="size-4 mr-2" />
+              Back to Projects
+            </Button>
+          </Link>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleDeleteProject}
+            disabled={deleteProjectMutation.isPending}
+          >
+            <Trash2 className="size-4 mr-2" />
+            Delete Project
           </Button>
-        </Link>
+        </div>
         <h1 className="text-2xl sm:text-3xl font-bold">{project.data.display_name}</h1>
         <p className="text-sm sm:text-base text-muted-foreground mt-1">
           {project.data.identifier}

@@ -1,12 +1,12 @@
 import { lazy, Suspense } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 
 import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Loader2, MessageSquare, Edit, Copy, ArrowLeft } from "lucide-react";
+import { Loader2, MessageSquare, Edit, Copy, ArrowLeft, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 // Lazy load dialogs for code splitting
@@ -23,8 +23,22 @@ export const Route = createFileRoute("/package/$identifier")({
 function PackageDetailComponent() {
   const { identifier } = Route.useParams();
   const router = useRouterState();
+  const queryClient = useQueryClient();
   const isChatRoute = router.location.pathname.includes("/chat");
   const pkg = useQuery(orpc.packages.get.queryOptions({ input: { identifier } }));
+
+  const remakeKctxHelperMutation = useMutation(
+    orpc.packages.remakeKctxHelper.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: orpc.packages.get.key({ input: { identifier } }) });
+        queryClient.invalidateQueries({ queryKey: orpc.packages.list.key() });
+        toast.success("kctx_helper regenerated");
+      },
+      onError: () => {
+        toast.error("Failed to regenerate kctx_helper");
+      },
+    })
+  );
 
   const handleCopyIdentifier = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -97,6 +111,19 @@ function PackageDetailComponent() {
                 </div>
               </div>
               <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  disabled={remakeKctxHelperMutation.isPending}
+                  onClick={() => remakeKctxHelperMutation.mutate({ identifier: pkg.data.identifier })}
+                  title="Remake kctx_helper (may take a few minutes)"
+                >
+                  {remakeKctxHelperMutation.isPending ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4 mr-2" />
+                  )}
+                  Remake kctx_helper
+                </Button>
                 <Suspense fallback={<Button variant="outline" disabled><Edit className="size-4 mr-2" />Edit</Button>}>
                   <EditPackageDialog identifier={pkg.data.identifier}>
                     <Button variant="outline">

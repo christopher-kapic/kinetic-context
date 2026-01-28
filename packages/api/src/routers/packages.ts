@@ -567,6 +567,7 @@ export const packagesRouter = {
           input.message,
           model,
           input.conversationId,
+          pkg.kctx_helper ?? "",
         )) {
           yield chunk;
         }

@@ -10,6 +10,7 @@ import {
   ensureRepoAvailable,
   checkoutTag,
   queryOpencode,
+  generateKctxHelperIfNeeded,
   type PackageConfig,
 } from "@kinetic-context/server-utils";
 
@@ -91,7 +92,9 @@ export function createMcpServer(): McpServer {
     {},
     async (): Promise<CallToolResult> => {
       try {
-        const packages = await listPackageConfigs(env.PACKAGES_DIR);
+        const clonedPackages = await listPackageConfigs(env.PACKAGES_DIR);
+        const localPackages = await listPackageConfigs(env.LOCAL_PACKAGES_DIR);
+        const packages = [...clonedPackages, ...localPackages];
 
         return {
           content: [
@@ -161,11 +164,17 @@ export function createMcpServer(): McpServer {
       timeout,
     }): Promise<CallToolResult> => {
       try {
-        // Get package config
-        const packageConfig = await readPackageConfig(
+        // Get package config from either directory (cloned first, then local)
+        let packageConfig = await readPackageConfig(
           env.PACKAGES_DIR,
           dependency_identifier,
         );
+        if (!packageConfig) {
+          packageConfig = await readPackageConfig(
+            env.LOCAL_PACKAGES_DIR,
+            dependency_identifier,
+          );
+        }
 
         if (!packageConfig) {
           return {
@@ -196,12 +205,16 @@ export function createMcpServer(): McpServer {
           }
         }
 
-        // Ensure repo is available (cloned or local)
+        // Ensure repo is available (cloned or local); use correct packagesDir by storage_type
+        const packagesDir =
+          packageConfig.storage_type === "local"
+            ? env.LOCAL_PACKAGES_DIR
+            : env.PACKAGES_DIR;
         const repoPath = await ensureRepoAvailable(
           packageConfig.repo_path,
           packageConfig.storage_type,
           packageConfig.urls.git,
-          env.PACKAGES_DIR,
+          packagesDir,
         );
 
         // Only checkout tag for cloned repos
@@ -211,7 +224,12 @@ export function createMcpServer(): McpServer {
 
         // Query opencode
         const timeoutMs = timeout != null ? timeout * 1000 : undefined;
-        const result = await queryOpencode(repoPath, query, sessionId, timeoutMs);
+        const kctxHelper = packageConfig.kctx_helper ?? "";
+        const result = await queryOpencode(repoPath, query, sessionId, timeoutMs, kctxHelper);
+
+        if (!sessionId && !kctxHelper.trim()) {
+          void generateKctxHelperIfNeeded(packagesDir, dependency_identifier, repoPath);
+        }
 
         return {
           content: [

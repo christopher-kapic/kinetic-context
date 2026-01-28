@@ -1,7 +1,12 @@
 import { join, dirname } from "node:path";
 import { env } from "@kinetic-context/env/server";
 import { logger } from "./logger";
-import { readGlobalConfig, readOpencodeConfig } from "./config";
+import {
+  readGlobalConfig,
+  readOpencodeConfig,
+  readPackageConfig,
+  writePackageConfig,
+} from "./config";
 
 /**
  * Get the opencode server URL from environment variable.
@@ -154,8 +159,15 @@ const DEFAULT_AGENT_PROMPT = `You are an AI agent whose job is to answer questio
 3. Explain not just what the code does, but how to use it effectively
 4. If the question is ambiguous, ask clarifying questions
 5. Focus on helping developers understand how to integrate and use the dependency in their projects
+6. If you need to explore the repository (e.g. read files, run commands), do so first, then give your full answer in the same response. Do not send only a short placeholder (e.g. "Let me explore...") and then stop—include your findings and complete answer in one reply.
 
 IMPORTANT: The working directory for this session is set to the repository root. When executing shell commands, you should operate from this directory. If you need to change directories, use 'cd' to navigate, but remember that the repository root is your base working directory.`;
+
+/**
+ * Prompt used to generate kctx_helper repository summary (background, 3x timeout).
+ */
+const KCTX_HELPER_SUMMARY_PROMPT =
+  "Provide a concise summary of this repository: its purpose, main exports or entry points, and key patterns or conventions. This summary will be used to give context to future questions about the repository. Reply with only the summary text, no preamble.";
 
 export interface OpencodeModel {
   providerID: string;
@@ -167,6 +179,7 @@ export async function* queryOpencodeStream(
   query: string,
   model?: OpencodeModel,
   sessionId?: string,
+  kctxHelper?: string,
 ): AsyncGenerator<{ text: string; done: boolean; sessionId?: string; thinking?: string }, void, unknown> {
   logger.log("[opencode]", `Starting streaming query for directory: ${repoPath}`);
   logger.log("[opencode]", `Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`);
@@ -258,7 +271,10 @@ export async function* queryOpencodeStream(
         agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
       }
 
-      const promptWithDirectory = `${agentPrompt}\n\nIMPORTANT: The repository you are analyzing is located at: ${repoPath}\nWhen executing shell commands, you should change to this directory first using 'cd ${repoPath}' before running any commands.`;
+      let promptWithDirectory = `${agentPrompt}\n\nIMPORTANT: The repository you are analyzing is located at: ${repoPath}\nWhen executing shell commands, you should change to this directory first using 'cd ${repoPath}' before running any commands.`;
+      if ((kctxHelper ?? "").trim() !== "") {
+        promptWithDirectory = `Repository summary (for context):\n\n${kctxHelper}\n\n---\n\n${promptWithDirectory}`;
+      }
 
       if (agentPrompt) {
         logger.log("[opencode]", `Sending agent prompt to new session`);
@@ -455,16 +471,8 @@ export async function* queryOpencodeStream(
               accumulatedText = part.text;
             }
 
-            if (part.time?.end) {
-              streamComplete = true;
-              if (heartbeatInterval) {
-                clearInterval(heartbeatInterval);
-                heartbeatInterval = null;
-              }
-              const thinkingText = accumulatedThinking.length > 0 ? accumulatedThinking.join("\n\n") : undefined;
-              yield { text: "", done: true, sessionId: currentSessionId, thinking: thinkingText };
-              return;
-            }
+            // Do not yield done on part.time?.end — there may be more assistant messages (e.g. after tool use).
+            // Turn completion is signaled by session.idle below.
           } else if (part.type && part.type !== "text" && part.type !== "reasoning") {
             const toolName = part.tool || part.name || "unknown";
             const toolState = part.state;
@@ -504,20 +512,17 @@ export async function* queryOpencodeStream(
           );
         }
 
-        if (event.type === "session.updated") {
-          const sessionInfo = event.properties?.info as { id?: string } | undefined;
-          if (sessionInfo?.id === currentSessionId && !streamComplete) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            if (accumulatedText && !streamComplete) {
-              streamComplete = true;
-              if (heartbeatInterval) {
-                clearInterval(heartbeatInterval);
-                heartbeatInterval = null;
-              }
-              const thinkingText = accumulatedThinking.length > 0 ? accumulatedThinking.join("\n\n") : undefined;
-              yield { text: "", done: true, sessionId: currentSessionId, thinking: thinkingText };
-              return;
+        if (event.type === "session.idle") {
+          const sessionIdFromEvent = (event.properties as { sessionID?: string })?.sessionID;
+          if (sessionIdFromEvent === currentSessionId && !streamComplete) {
+            streamComplete = true;
+            if (heartbeatInterval) {
+              clearInterval(heartbeatInterval);
+              heartbeatInterval = null;
             }
+            const thinkingText = accumulatedThinking.length > 0 ? accumulatedThinking.join("\n\n") : undefined;
+            yield { text: "", done: true, sessionId: currentSessionId, thinking: thinkingText };
+            return;
           }
         }
       }
@@ -554,10 +559,11 @@ export async function queryOpencode(
   query: string,
   sessionId?: string,
   timeoutMs?: number,
+  kctxHelper?: string,
 ): Promise<{ response: string; sessionId: string }> {
   const ms = timeoutMs ?? env.OPENCODE_TIMEOUT_MS;
   return withTimeout(
-    queryOpencodeInternal(repoPath, query, sessionId),
+    queryOpencodeInternal(repoPath, query, sessionId, kctxHelper),
     ms,
     `OpenCode query timed out after ${ms}ms`,
   );
@@ -567,6 +573,7 @@ async function queryOpencodeInternal(
   repoPath: string,
   query: string,
   sessionId?: string,
+  kctxHelper?: string,
 ): Promise<{ response: string; sessionId: string }> {
   logger.log("[opencode]", `Starting query for directory: ${repoPath}`);
   logger.log("[opencode]", `Query: ${query.substring(0, 100)}${query.length > 100 ? "..." : ""}`);
@@ -648,7 +655,10 @@ async function queryOpencodeInternal(
         agentPrompt = globalConfig.default_agent_prompt || DEFAULT_AGENT_PROMPT;
       }
 
-      const promptWithDirectory = `${agentPrompt}\n\nIMPORTANT: The repository you are analyzing is located at: ${repoPath}\nWhen executing shell commands, you should change to this directory first using 'cd ${repoPath}' before running any commands.`;
+      let promptWithDirectory = `${agentPrompt}\n\nIMPORTANT: The repository you are analyzing is located at: ${repoPath}\nWhen executing shell commands, you should change to this directory first using 'cd ${repoPath}' before running any commands.`;
+      if ((kctxHelper ?? "").trim() !== "") {
+        promptWithDirectory = `Repository summary (for context):\n\n${kctxHelper}\n\n---\n\n${promptWithDirectory}`;
+      }
 
       if (agentPrompt) {
         logger.log("[opencode]", `Sending agent prompt to new session`);
@@ -752,5 +762,49 @@ async function queryOpencodeInternal(
       logger.error("[opencode]", `Error in queryOpencode (opencode URL: ${opencodeUrl}):`, error instanceof Error ? error.message : String(error));
     }
     throw error;
+  }
+}
+
+/**
+ * If the package has no kctx_helper, ask OpenCode for a repo summary and write it to the package config.
+ * Intended to be called fire-and-forget after responding to a fresh-session query_dependency.
+ * Uses 3x default timeout. Logs errors; does not throw.
+ */
+export async function generateKctxHelperIfNeeded(
+  packagesDir: string,
+  identifier: string,
+  repoPath: string,
+): Promise<void> {
+  try {
+    const config = await readPackageConfig(packagesDir, identifier, true);
+    if (!config) {
+      logger.log("[opencode]", `generateKctxHelperIfNeeded: package not found ${identifier}`);
+      return;
+    }
+    if ((config.kctx_helper ?? "").trim() !== "") {
+      return;
+    }
+    const timeoutMs = env.OPENCODE_TIMEOUT_MS * 3;
+    logger.log("[opencode]", `Generating kctx_helper for ${identifier} (timeout ${timeoutMs}ms)`);
+    const result = await queryOpencode(
+      repoPath,
+      KCTX_HELPER_SUMMARY_PROMPT,
+      undefined,
+      timeoutMs,
+      undefined,
+    );
+    const updated = await readPackageConfig(packagesDir, identifier, true);
+    if (!updated) {
+      logger.log("[opencode]", `generateKctxHelperIfNeeded: package gone ${identifier}`);
+      return;
+    }
+    await writePackageConfig(packagesDir, { ...updated, kctx_helper: result.response });
+    logger.log("[opencode]", `Saved kctx_helper for ${identifier}`);
+  } catch (error) {
+    logger.error(
+      "[opencode]",
+      `generateKctxHelperIfNeeded failed for ${identifier}:`,
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }

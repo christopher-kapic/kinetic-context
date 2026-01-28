@@ -33,6 +33,7 @@ const PackageConfigSchema = z.object({
     git: z.string().optional(), // Only required for cloned repos
     logo: z.string().optional(),
   }),
+  kctx_helper: z.string().optional(),
 });
 
 const ProjectDependencySchema = z.object({

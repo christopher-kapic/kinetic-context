@@ -525,6 +525,7 @@ export function PackageChat({ packageIdentifier, initialSessionId }: PackageChat
                 content={message.content}
                 // Show thinking in messages for historical context (when showThinking is enabled)
                 thinking={showThinking ? message.thinking : undefined}
+                agentName={agentInfoQuery.data?.name}
               />
             ))}
             {isStreaming && currentStreamingText && !hasAddedFinalMessageRef.current && (
@@ -534,6 +535,7 @@ export function PackageChat({ packageIdentifier, initialSessionId }: PackageChat
                 isStreaming={true}
                 thinking={showThinking ? currentStreamingThinking : undefined}
                 isThinkingPhase={false}
+                agentName={agentInfoQuery.data?.name}
               />
             )}
             {isStreaming && !currentStreamingText && (
@@ -543,6 +545,7 @@ export function PackageChat({ packageIdentifier, initialSessionId }: PackageChat
                 isStreaming={true}
                 thinking={showThinking ? (currentStreamingThinking ?? "") : undefined}
                 isThinkingPhase={showThinking}
+                agentName={agentInfoQuery.data?.name}
               />
             )}
             <div ref={messagesEndRef} />

@@ -11,11 +11,14 @@ interface ChatMessageProps {
   thinking?: string;
   /** True while the assistant is in the thinking phase (streaming but no response text yet). Dropdown is shown immediately and stays open until this becomes false. */
   isThinkingPhase?: boolean;
+  /** Display name for the assistant (e.g. from agent config). Defaults to "Kinetic Context". */
+  agentName?: string;
 }
 
-export const ChatMessage = memo(function ChatMessage({ role, content, isStreaming, thinking, isThinkingPhase = false }: ChatMessageProps) {
+export const ChatMessage = memo(function ChatMessage({ role, content, isStreaming, thinking, isThinkingPhase = false, agentName }: ChatMessageProps) {
   const isUser = role === "user";
   const [isThinkingOpen, setIsThinkingOpen] = useState(false);
+  const assistantLabel = agentName ?? "Kinetic Context";
 
   // Show thinking dropdown when we're in thinking phase OR when we have thinking content
   const showThinkingDropdown = !isUser && (thinking !== undefined || isThinkingPhase);
@@ -33,7 +36,7 @@ export const ChatMessage = memo(function ChatMessage({ role, content, isStreamin
       <div className={`flex ${isUser ? "flex-row-reverse" : "flex-row"} items-start gap-2 w-full max-w-[85%]`}>
         <Card className={`flex-1 min-w-0 ${isUser ? "bg-primary text-primary-foreground" : ""}`}>
           <CardContent className="p-4">
-            <div className="text-sm font-medium mb-1">{isUser ? "You" : "Assistant"}</div>
+            <div className="text-sm font-medium mb-1">{isUser ? "You" : assistantLabel}</div>
             {showThinkingDropdown && (
               <div className="mb-3 pb-3 border-b border-border">
                 <Button

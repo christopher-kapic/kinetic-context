@@ -11,6 +11,7 @@ import {
   checkoutTag,
   queryOpencode,
   generateKctxHelperIfNeeded,
+  logger,
   type PackageConfig,
 } from "@kinetic-context/server-utils";
 
@@ -217,9 +218,17 @@ export function createMcpServer(): McpServer {
           packagesDir,
         );
 
-        // Only checkout tag for cloned repos
+        // Only checkout tag for cloned repos (best-effort; continue with current ref on failure)
         if (packageConfig.storage_type === "cloned" && tag) {
-          await checkoutTag(repoPath, tag);
+          try {
+            await checkoutTag(repoPath, tag);
+          } catch (err) {
+            logger.warn(
+              "[mcp]",
+              "Git checkout failed for package query, continuing with current ref:",
+              err instanceof Error ? err.message : String(err),
+            );
+          }
         }
 
         // Query opencode

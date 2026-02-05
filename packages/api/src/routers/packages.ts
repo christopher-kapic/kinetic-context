@@ -18,6 +18,7 @@ import {
   pullRepository,
   queryOpencodeStream,
   regenerateKctxHelper,
+  logger,
   type PackageConfig,
   type OpencodeModel,
 } from "@kinetic-context/server-utils";
@@ -466,9 +467,25 @@ export const packagesRouter = {
     }> = [];
 
     const clonedPackages = await listPackageConfigs(env.PACKAGES_DIR);
+    const packagesToProcess = clonedPackages.filter(
+      (p) => p.urls?.git && p.repo_path,
+    );
+    const uniqueRepos = new Set(
+      packagesToProcess.map((p) => getRepoIdentifierFromUrl(p.urls!.git!)),
+    );
+    const totalPulls = uniqueRepos.size;
+
+    logger.info(
+      "[packages] updateAll: starting update for",
+      packagesToProcess.length,
+      "cloned package(s) (",
+      totalPulls,
+      "unique repo(s))",
+    );
 
     // Track pulled repos to avoid pulling the same repo multiple times
     const pulledRepos = new Set<string>();
+    let pulledCount = 0;
 
     for (const pkg of clonedPackages) {
       if (!pkg.urls?.git || !pkg.repo_path) continue;
@@ -486,6 +503,29 @@ export const packagesRouter = {
       }
 
       const pullResult = await pullRepository(pkg.repo_path);
+      pulledCount++;
+      if (pullResult.success) {
+        logger.info(
+          "[packages] updateAll: (",
+          pulledCount,
+          "/",
+          totalPulls,
+          ")",
+          pkg.identifier,
+          "– success",
+        );
+      } else {
+        logger.warn(
+          "[packages] updateAll: (",
+          pulledCount,
+          "/",
+          totalPulls,
+          ")",
+          pkg.identifier,
+          "– failed:",
+          pullResult.error ?? "unknown error",
+        );
+      }
       results.push({
         identifier: pkg.identifier,
         display_name: pkg.display_name,
@@ -495,6 +535,16 @@ export const packagesRouter = {
 
       pulledRepos.add(repoIdentifier);
     }
+
+    const succeeded = results.filter((r) => r.success).length;
+    const failed = results.length - succeeded;
+    logger.info(
+      "[packages] updateAll: finished –",
+      succeeded,
+      "succeeded,",
+      failed,
+      "failed",
+    );
 
     return results;
   }),
@@ -539,9 +589,17 @@ export const packagesRouter = {
         packagesDir,
       );
 
-      // Only checkout tag for cloned repos
+      // Only checkout tag for cloned repos (best-effort; continue with current ref on failure)
       if (pkg.storage_type === "cloned" && pkg.default_tag) {
-        await checkoutTag(repoPath, pkg.default_tag);
+        try {
+          await checkoutTag(repoPath, pkg.default_tag);
+        } catch (err) {
+          logger.warn(
+            "[packages]",
+            "Git checkout failed for package query, continuing with current ref:",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
       }
 
       // Parse model if provided
@@ -599,7 +657,15 @@ export const packagesRouter = {
         packagesDir,
       );
       if (pkg.storage_type === "cloned" && pkg.default_tag) {
-        await checkoutTag(repoPath, pkg.default_tag);
+        try {
+          await checkoutTag(repoPath, pkg.default_tag);
+        } catch (err) {
+          logger.warn(
+            "[packages]",
+            "Git checkout failed for package query, continuing with current ref:",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
       }
       try {
         await regenerateKctxHelper(packagesDir, input.identifier, repoPath);

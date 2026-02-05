@@ -257,7 +257,7 @@ function PackagesComponent() {
           <DialogHeader>
             <DialogTitle>Update All Packages</DialogTitle>
             <DialogDescription>
-              This will pull the latest changes from git for all cloned packages. Local packages will be skipped.
+              This will pull the latest changes from git for all cloned packages. Local packages will be skipped. This may take a while if you have many packages.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -268,7 +268,7 @@ function PackagesComponent() {
               {updateAllMutation.isPending ? (
                 <>
                   <Loader2 className="size-4 mr-2 animate-spin" />
-                  Updating...
+                  Updating all packages…
                 </>
               ) : (
                 "Confirm Update"

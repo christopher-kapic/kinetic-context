@@ -82,17 +82,28 @@ kctx down
 
 ### update
 
-Pull latest images and restart services.
+Update kctx and Docker images, then restart services.
 
 ```bash
 kctx update
 ```
 
 This command:
-1. Pulls the latest kinetic-context image
-2. Checks if a local OpenCode image exists (built from source)
-3. If no local image, attempts to pull the pre-built OpenCode image from ghcr.io
-4. Restarts all services with new images
+1. Updates the kctx script to the latest version from GitHub
+2. Pulls the latest kinetic-context Docker image
+3. Checks if a local OpenCode image exists (built from source)
+4. If no local image, attempts to pull the pre-built OpenCode image from ghcr.io
+5. Restarts all services with new images
+
+### self-update
+
+Update only the kctx script (without updating Docker images).
+
+```bash
+kctx self-update
+```
+
+This command fetches the latest version of the kctx script from GitHub and replaces the current installation.
 
 ## Package Management
 
@@ -275,7 +286,8 @@ Starts an interactive wizard to select and modify an existing provider.
 | `kctx logs kc` | Show kinetic-context logs |
 | `kctx logs oc` | Show OpenCode logs |
 | `kctx down` | Stop and remove containers |
-| `kctx update` | Update images and restart |
+| `kctx update` | Update kctx and Docker images, then restart |
+| `kctx self-update` | Update kctx script only |
 | `kctx package add` | Add a new package |
 | `kctx package edit` | Edit a package |
 | `kctx package pull <name>` | Pull updates for a package |

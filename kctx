@@ -161,7 +161,7 @@ EOF
 )
 
   echo "Creating package..."
-  local result=$(api_call "POST" "/packages" "$data")
+  local result=$(api_call "POST" "/packages.create" "$data")
   echo "$result" | head -50
 }
 
@@ -175,7 +175,7 @@ package_edit() {
   echo ""
 
   # Fetch all packages
-  local packages=$(api_call "GET" "/packages")
+  local packages=$(api_call "GET" "/packages.list")
   if [ -z "$packages" ] || [ "$packages" = "[]" ]; then
     echo "No packages found"
     exit 0
@@ -209,7 +209,7 @@ package_edit() {
   echo ""
 
   # Fetch package details
-  local pkg_json=$(api_call "GET" "/packages/$selected_id")
+  local pkg_json=$(api_call "GET" "/packages.get?data={\"identifier\":\"$selected_id\"}")
 
   # Extract current values
   local current_identifier=$(echo "$pkg_json" | grep -o '"identifier":"[^"]*"' | head -1 | sed 's/"identifier":"//;s/"//g')
@@ -301,7 +301,7 @@ package_edit() {
   fi
 
   echo "Updating package..."
-  local result=$(api_call "PATCH" "/packages/$current_identifier" "$updates")
+  local result=$(api_call "PATCH" "/packages.update" "$updates")
   echo "$result" | head -50
 }
 
@@ -319,7 +319,7 @@ package_pull() {
     echo ""
 
     # Fetch all packages
-    local packages=$(api_call "GET" "/packages")
+  local packages=$(api_call "GET" "/packages.list")
     if [ -z "$packages" ] || [ "$packages" = "[]" ]; then
       echo "No packages found"
       exit 0
@@ -362,7 +362,7 @@ package_pull() {
   echo ""
 
   # Fetch package details to get repo path
-  local pkg_json=$(api_call "GET" "/packages/$target_identifier")
+  local pkg_json=$(api_call "GET" "/packages.get?data={\"identifier\":\"$target_identifier\"}")
   local storage_type=$(echo "$pkg_json" | grep -o '"storage_type":"[^"]*"' | head -1 | sed 's/"storage_type":"//;s/"//g')
   local repo_path=$(echo "$pkg_json" | grep -o '"repo_path":"[^"]*"' | head -1 | sed 's/"repo_path":"//;s/"//g')
 
@@ -402,7 +402,7 @@ package_pull_all() {
   echo ""
 
   # Fetch all packages
-  local packages=$(api_call "GET" "/packages")
+  local packages=$(api_call "GET" "/packages.list")
   if [ -z "$packages" ] || [ "$packages" = "[]" ]; then
     echo "No packages found"
     exit 0

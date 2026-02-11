@@ -645,7 +645,7 @@ case "${1:-start}" in
 
     # Update kctx script first
     echo "Updating kctx script..."
-    local kctx_backup="$KCTX_SCRIPT.bak"
+    kctx_backup="$KCTX_SCRIPT.bak"
     cp "$KCTX_SCRIPT" "$kctx_backup"
 
     if ! curl -fsSL -o "$KCTX_SCRIPT" "$GITHUB_RAW_URL/kctx"; then

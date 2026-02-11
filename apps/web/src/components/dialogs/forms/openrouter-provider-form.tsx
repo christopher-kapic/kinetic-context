@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { orpcClient } from "@/utils/orpc";
 
 const openRouterSchema = z.object({
   providerId: z.string().min(1, "Provider ID is required"),
@@ -39,6 +42,7 @@ export function OpenRouterProviderForm({
   const [modelsText, setModelsText] = useState(
     getModelsForDisplay(initialData?.models)
   );
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
 
   const form = useForm<OpenRouterForm>({
     defaultValues: {
@@ -83,6 +87,31 @@ export function OpenRouterProviderForm({
       onSave(value.providerId, config);
     },
   });
+
+  const fetchModels = async () => {
+    const currentValues = form.state.values;
+    const baseURL = currentValues.baseURL || "https://openrouter.ai/api/v1";
+
+    setIsLoadingModels(true);
+    try {
+      const result = await orpcClient.config.fetchOpenrouterModels({
+        baseURL: baseURL !== "https://openrouter.ai/api/v1" ? baseURL : undefined,
+      });
+
+      if (result.models && Array.isArray(result.models) && result.models.length > 0) {
+        const modelIds = result.models.map((model) => model.id).join("\n");
+        setModelsText(modelIds);
+        form.setFieldValue("models", modelIds);
+        toast.success(`Loaded ${result.models.length} models`);
+      } else {
+        throw new Error("No models found");
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to fetch models");
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
 
   // Sync modelsText state and form values when initialData changes
   useEffect(() => {
@@ -190,7 +219,25 @@ export function OpenRouterProviderForm({
       </form.Field>
 
       <div className="space-y-2">
-        <Label htmlFor="models">Models (one per line)</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="models">Models (one per line)</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={fetchModels}
+            disabled={isLoadingModels}
+          >
+            {isLoadingModels ? (
+              <>
+                <Loader2 className="size-3 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              "Fetch Models"
+            )}
+          </Button>
+        </div>
         <Textarea
           id="models"
           value={modelsText}

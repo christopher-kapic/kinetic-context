@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { orpcClient } from "@/utils/orpc";
 
 const customProviderSchema = z.object({
   providerId: z.string().min(1, "Provider ID is required"),
@@ -37,6 +40,7 @@ export function CustomProviderForm({
           .join("\n")
       : ""
   );
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
 
   const form = useForm<CustomProviderForm>({
     defaultValues: {
@@ -90,6 +94,43 @@ export function CustomProviderForm({
       onSave(value.providerId, config);
     },
   });
+
+  const fetchModels = async () => {
+    const currentValues = form.state.values;
+    const baseURL = currentValues.baseURL;
+
+    if (!baseURL) {
+      toast.error("Please enter a Base URL first");
+      return;
+    }
+
+    setIsLoadingModels(true);
+    try {
+      const headers: HeadersInit = {};
+      if (currentValues.apiKey) {
+        headers.Authorization = `Bearer ${currentValues.apiKey}`;
+      }
+
+      const response = await fetch(`${baseURL}/models`, { headers });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+        const modelIds = data.data.map((model: any) => `${model.id}: ${model.id.split("/").pop() || model.id}`).join("\n");
+        setModelsText(modelIds);
+        form.setFieldValue("models", modelIds);
+        toast.success(`Loaded ${data.data.length} models`);
+      } else {
+        throw new Error("No models found");
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to fetch models. The endpoint may not support model listing.");
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
 
   return (
     <form
@@ -220,7 +261,25 @@ export function CustomProviderForm({
       </form.Field>
 
       <div className="space-y-2">
-        <Label htmlFor="models">Models (optional, one per line)</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="models">Models (optional, one per line)</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={fetchModels}
+            disabled={isLoadingModels || !form.state.values.baseURL}
+          >
+            {isLoadingModels ? (
+              <>
+                <Loader2 className="size-3 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              "Fetch Models"
+            )}
+          </Button>
+        </div>
         <Textarea
           id="models"
           value={modelsText}

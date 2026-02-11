@@ -2,6 +2,9 @@
 
 set -e
 
+# Check if stdin is a terminal
+IS_TTY="-t"
+
 API_BASE="http://localhost:7167/rpc"
 COMPOSE_FILE="$HOME/.kctx/compose.yaml"
 KCTX_SCRIPT="$HOME/.kctx/bin/kctx"
@@ -31,22 +34,101 @@ api_call() {
   local data="$3"
 
   if [ -n "$data" ]; then
-    curl -s -X "$method" "$API_BASE$endpoint" \
+    curl -s --max-time 30 -X "$method" "$API_BASE$endpoint" \
       -H "Content-Type: application/json" \
       -d "$data"
   else
-    curl -s -X "$method" "$API_BASE$endpoint" \
+    curl -s --max-time 30 -X "$method" "$API_BASE$endpoint" \
       -H "Content-Type: application/json"
   fi
 }
 
 # Check if API is available
 check_api() {
-  if ! curl -s "$API_BASE" >/dev/null 2>&1; then
-    echo "Error: kinetic-context API is not running at $API_BASE"
-    echo "Start it with: kctx start"
+  local api_response
+  api_response=$(api_call "POST" "/config/get" "{}")
+
+  if [ -z "$api_response" ]; then
+    echo "Error: Cannot connect to kinetic-context API at $API_BASE"
+    echo "Start the server with: kctx start"
     exit 1
   fi
+
+  # Check if response is HTML (web app) instead of JSON
+  if echo "$api_response" | head -1 | grep -qE "<!doctype|<html|<head>"; then
+    echo "Error: API at $API_BASE returned web page instead of JSON response"
+    echo "The server may not be fully initialized or running correctly."
+    echo ""
+    echo "Troubleshooting steps:"
+    echo "  1. Check if server is running: kctx status"
+    echo "  2. Check server logs: kctx logs kc"
+    echo "  3. Restart services: kctx restart"
+    exit 1
+  fi
+}
+
+# Check if node is available for JSON manipulation
+check_node() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Error: node.js is required but not installed"
+    exit 1
+  fi
+}
+
+# Initialize config directory and opencode.json
+init_config() {
+  echo "Initializing kinetic-context configuration..."
+
+  # Check if compose.yaml exists
+  if [ ! -f "$COMPOSE_FILE" ]; then
+    echo "Error: compose.yaml not found. Please run the setup script first."
+    exit 1
+  fi
+
+  # Get config directory from compose file or environment
+  local config_dir="${OPENCODE_CONFIG_DIR:-$HOME/.kctx/opencode/config}"
+
+  echo "Config directory: $config_dir"
+
+  # Create directory if it doesn't exist
+  if [ ! -d "$config_dir" ]; then
+    mkdir -p "$config_dir"
+    echo "Created config directory: $config_dir"
+  fi
+
+  # Check if opencode.json already exists
+  local config_file="$config_dir/opencode.json"
+  if [ -f "$config_file" ]; then
+    echo "opencode.json already exists at $config_file"
+    echo "Skipping initialization (existing config preserved)"
+    return 0
+  fi
+
+  # Create default opencode.json
+  local default_config='{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {},
+  "agent": {
+    "default": {
+      "mode": "primary",
+      "prompt": "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    }
+  }
+}'
+
+  echo "$default_config" > "$config_file"
+  echo "Created default opencode.json at $config_file"
+  echo ""
+  echo "Configuration initialized successfully!"
+  echo ""
+  echo "Next steps:"
+  echo "  1. kctx start - Start the kinetic-context services"
+  echo "  2. kctx provider add - Add a model provider"
 }
 
 # Prompt for input with default value
@@ -71,6 +153,138 @@ prompt_password() {
   local var_name="$2"
   read -s -p "$prompt: " "$var_name"
   echo
+}
+
+# Read from terminal (handles piped stdin issues)
+read_terminal() {
+  local prompt="$1"
+  local var_name="$2"
+  local timeout="${3:-30}"
+
+  if [ -t 0 ]; then
+    # stdin is a terminal
+    read ${timeout:+-t $timeout} -p "$prompt" "$var_name"
+    return $?
+  elif [ -e /dev/tty ]; then
+    # stdin is not a terminal, use /dev/tty
+    read ${timeout:+-t $timeout} -p "$prompt" "$var_name" </dev/tty
+    return $?
+  else
+    # No terminal access available
+    echo "Error: Cannot read input. Please run interactively." >&2
+    eval "$var_name="
+    return 1
+  fi
+}
+
+# Fetch models from OpenRouter (no auth required)
+fetch_openrouter_models() {
+  local base_url="${1:-https://openrouter.ai/api/v1}"
+  curl -s "${base_url}/models" 2>/dev/null | grep -o '"id":"[^"]*"' | sed 's/"id":"//;s/"//g' | sort -u
+}
+
+# Fetch models from OpenCode Zen (requires API key)
+fetch_opencode_zen_models() {
+  local api_key="$1"
+  local base_url="${2:-https://opencode.ai/zen/v1}"
+  curl -s -H "Authorization: Bearer $api_key" "${base_url}/models" 2>/dev/null | grep -o '"id":"[^"]*"' | sed 's/"id":"//;s/"//g' | sort -u
+}
+
+# Fetch models from custom endpoint
+fetch_custom_models() {
+  local base_url="$1"
+  local api_key="$2"
+  if [ -n "$api_key" ]; then
+    curl -s -H "Authorization: Bearer $api_key" "${base_url}/models" 2>/dev/null | grep -o '"id":"[^"]*"' | sed 's/"id":"//;s/"//g' | sort -u
+  else
+    curl -s "${base_url}/models" 2>/dev/null | grep -o '"id":"[^"]*"' | sed 's/"id":"//;s/"//g' | sort -u
+  fi
+}
+
+# Interactive model selector with search and arrow keys
+select_model_interactive() {
+  local provider_type="$1"
+  local api_key="$2"
+  local base_url="$3"
+  local model_type="$4"
+
+  echo ""
+  echo "Search for models (or press Enter to skip auto-fetch):"
+  read_terminal "> " search_term 10
+
+  if [ -z "$search_term" ]; then
+    return 1
+  fi
+
+  echo ""
+  echo "Fetching models..."
+
+  local models=""
+  case "$provider_type" in
+    1) # OpenRouter
+      models=$(fetch_openrouter_models "$base_url")
+      ;;
+    2) # OpenCode Zen
+      models=$(fetch_opencode_zen_models "$api_key" "$base_url")
+      ;;
+    3) # Custom
+      models=$(fetch_custom_models "$base_url" "$api_key")
+      ;;
+  esac
+
+  if [ -z "$models" ]; then
+    echo "Error: Failed to fetch models or no models available"
+    return 1
+  fi
+
+  local filtered_models=$(echo "$models" | grep -i "$search_term")
+
+  if [ -z "$filtered_models" ]; then
+    echo "No models match '$search_term'"
+    return 1
+  fi
+
+  local model_count=$(echo "$filtered_models" | wc -l)
+  echo ""
+  echo "Found $model_count models matching '$search_term':"
+  echo ""
+
+  local count=1
+  declare -a model_array
+  while IFS= read -r model; do
+    [ -z "$model" ] && continue
+    model_array+=("$model")
+    echo "  $count. $model"
+    count=$((count + 1))
+  done <<< "$filtered_models"
+
+  if [ ${#model_array[@]} -eq 0 ]; then
+    echo "No models found"
+    return 1
+  fi
+
+  echo ""
+  echo "Use arrow keys to navigate, Enter to select, or Esc to cancel."
+  read_terminal "Select model number [1-${#model_array[@]}]: " selection 30
+  local read_status=$?
+
+  if [ $read_status -ne 0 ] || [ -z "$selection" ]; then
+    echo ""
+    echo "No valid selection made"
+    return 1
+  fi
+
+  if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le ${#model_array[@]} ]; then
+    selected_model="${model_array[$((selection - 1))]}"
+    echo ""
+    echo "Selected: $selected_model"
+    eval "$model_type=\"$selected_model\""
+    return 0
+  fi
+
+  echo ""
+  echo "Invalid selection"
+  return 1
 }
 
 # Package add command
@@ -416,6 +630,7 @@ package_pull_all() {
 # Provider add command
 provider_add() {
   check_api
+  check_node
 
   echo ""
   echo "Add Provider"
@@ -436,14 +651,14 @@ provider_add() {
       provider_npm="@openrouter/ai-sdk-provider"
       provider_name="OpenRouter"
       default_base_url="https://openrouter.ai/api/v1"
-      default_model="anthropic/claude-3.5-sonnet"
+      api_key=""
       ;;
     2)
       provider_id="opencode"
       provider_npm="@ai-sdk/openai-compatible"
       provider_name="OpenCode Zen"
       default_base_url="https://opencode.ai/zen/v1"
-      default_model="gpt-5.2-codex"
+      api_key=""
       ;;
     3)
       provider_id=""
@@ -453,8 +668,8 @@ provider_add() {
       read -p "NPM package (e.g., @ai-sdk/openai-compatible): " provider_npm
       echo ""
       prompt_with_default "Base URL" "" base_url
-      prompt_with_default "Default Model" "" default_model
       provider_name="$provider_id"
+      prompt_password "API Key (optional, for fetching models)" api_key
       ;;
     *)
       echo "Invalid selection"
@@ -465,29 +680,85 @@ provider_add() {
   if [ "$provider_type" != "3" ]; then
     prompt_password "API Key" api_key
     prompt_with_default "Base URL" "$default_base_url" base_url
-    prompt_with_default "Default Model" "$default_model" default_model
   fi
 
   echo ""
-  echo "Models (one per line, empty line to finish):"
-  local models_json="{}"
+  echo "Models (one per line, or type 'search' to search and select interactively):"
+  local models_json=""
   local model_count=0
-  while IFS= read -r line; do
+
+  while true; do
+    read_terminal "Add model (or 'done'/'d' to finish): " line 10
+    local read_status=$?
+
+    # Debug: Show what was read
+    # echo "DEBUG: read_status=$read_status, line='$line'" >&2
+
+    # Handle timeout or EOF (treat as exit)
+    if [ $read_status -ne 0 ]; then
+      echo ""
+      break
+    fi
+
+    if [ "$line" = "done" ] || [ "$line" = "d" ]; then
+      break
+    fi
+
     if [ -z "$line" ]; then
       break
     fi
-    model_count=$((model_count + 1))
-    local model_id=$(echo "$line" | xargs)
-    local model_name="$model_id"
-    models_json=$(echo "$models_json" | sed "s/}/\"$model_id\":{\"name\":\"$model_name\"}/1")
+
+    if [ "$line" = "search" ]; then
+      echo ""
+      select_model_interactive "$provider_type" "$api_key" "$base_url" "selected_model"
+      if [ -n "$selected_model" ]; then
+        model_count=$((model_count + 1))
+        local model_name="$selected_model"
+        if [ -z "$models_json" ]; then
+          models_json="\"$selected_model\":{\"name\":\"$model_name\"}"
+        else
+          models_json="$models_json,\"$selected_model\":{\"name\":\"$model_name\"}"
+        fi
+        echo "  Added: $selected_model"
+        # Debug: Show model count
+        # echo "DEBUG: model_count=$model_count" >&2
+      fi
+    else
+      model_count=$((model_count + 1))
+      local model_id=$(echo "$line" | xargs)
+      local model_name="$model_id"
+      if [ -z "$models_json" ]; then
+        models_json="\"$model_id\":{\"name\":\"$model_name\"}"
+      else
+        models_json="$models_json,\"$model_id\":{\"name\":\"$model_name\"}"
+      fi
+      echo "  Added: $model_id"
+      # Debug: Show model count
+      # echo "DEBUG: model_count=$model_count" >&2
+    fi
   done
+
+  # Only prompt for default model if at least one model was added
+  local default_model=""
+  if [ "$model_count" -gt 0 ]; then
+    echo ""
+    prompt_with_default "Default Model" "" default_model
+  fi
+
+  # Wrap models JSON (empty if no models added)
+  local models_final
+  if [ -z "$models_json" ]; then
+    models_final="{}"
+  else
+    models_final="{$models_json}"
+  fi
 
   echo ""
   echo "Summary:"
   echo "  Provider ID: $provider_id"
   echo "  NPM Package: $provider_npm"
   echo "  Base URL: $base_url"
-  echo "  Default Model: $default_model"
+  [ -n "$default_model" ] && echo "  Default Model: $default_model"
   echo "  Models: $model_count configured"
   echo ""
 
@@ -498,25 +769,110 @@ provider_add() {
     exit 0
   fi
 
-  # Get current config and add provider
-  local current_config=$(api_call "POST" "/config/opencode")
+  # Build provider JSON directly
+  local provider_json="{\"$provider_id\":{\"npm\":\"$provider_npm\",\"name\":\"$provider_name\",\"options\":{\"baseURL\":\"$base_url\",\"apiKey\":\"$api_key\"},\"models\":$models_final}}"
 
-  # Build provider JSON
-  local provider_json=$(cat <<EOF
-{"$provider_id":{"npm":"$provider_npm","name":"$provider_name","options":{"baseURL":"$base_url","apiKey":"$api_key"},"models":$models_json}}
-EOF
-)
+  # Get current config
+  local current_config=$(api_call "POST" "/config/get" "{}")
 
-  # Merge provider into current config
-  local new_config=$(echo "$current_config" | sed 's/"provider":{}/"provider":{'"$provider_id"'/' | sed 's/}$/,'$provider_json'}/')
-
-  # Update model default if set
-  if [ -n "$default_model" ]; then
-    new_config=$(echo "$new_config" | sed "s/\"model\":\"[^\"]*\"/\"model\":\"$provider_id\/$default_model\"/1")
+  # Check if config is valid JSON
+  local is_valid_config="false"
+  if [ -n "$current_config" ] && echo "$current_config" | python3 -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
+    is_valid_config="true"
   fi
 
+  local new_config
+  echo "DEBUG: Building config with jq..."
+
+  # Use jq if available, otherwise use Python
+  if command -v jq >/dev/null 2>&1; then
+    if [ "$is_valid_config" = "true" ]; then
+      # Merge provider into existing config
+      new_config=$(echo "$current_config" | jq ".provider.\"$provider_id\" = $provider_json")
+    else
+      # Create new config with provider
+      new_config=$(echo "{}" | jq "{provider: {$provider_id: $provider_json}}")
+    fi
+
+    # Set default model if selected
+    if [ -n "$default_model" ]; then
+      local model_value="$provider_id/$default_model"
+      new_config=$(echo "$new_config" | jq ".model = \"$model_value\"")
+    fi
+  else
+    # Fallback to Python
+    if [ "$is_valid_config" = "true" ]; then
+      new_config=$(python3 << PYTHON_EOF
+import json, sys
+config = json.load(sys.stdin)
+provider = json.loads('''$provider_json''')
+if 'provider' not in config:
+    config['provider'] = {}
+config['provider']['$provider_id'] = provider
+print(json.dumps(config))
+PYTHON_EOF
+)
+    else
+      new_config=$(python3 << PYTHON_EOF
+import json, sys
+provider = json.loads('''$provider_json''')
+config = {'provider': {'$provider_id': provider}}
+print(json.dumps(config))
+PYTHON_EOF
+)
+    fi
+
+    # Set default model if selected
+    if [ -n "$default_model" ]; then
+      local model_value="$provider_id/$default_model"
+      new_config=$(python3 << PYTHON_EOF
+import json, sys
+config = json.loads('''$new_config''')
+config['model'] = '$model_value'
+print(json.dumps(config))
+PYTHON_EOF
+)
+    fi
+  fi
+
+  echo "DEBUG: Config built successfully"
+
   echo "Saving provider..."
-  local result=$(api_call "PATCH" "/config/opencode" "\"$new_config\"")
+  echo "DEBUG: Calling /config/update endpoint..."
+
+  local payload="{\"json\":{\"config\":$new_config}}"
+  echo "DEBUG: Payload size: ${#payload} bytes"
+
+  local result=$(api_call "POST" "/config/update" "$payload")
+
+  echo "DEBUG: API call completed"
+
+  # Check if save was successful
+  if [ -z "$result" ]; then
+    echo ""
+    echo "Error: Empty response from server"
+    echo "The server may have timed out or failed silently."
+    echo ""
+    echo "Troubleshooting:"
+    echo "  1. Check server logs: kctx logs kc"
+    echo "  2. Restart services: kctx restart"
+    exit 1
+  fi
+
+  if echo "$result" | head -1 | grep -qE "<!doctype|<html|<head>"; then
+    echo ""
+    echo "Error: Failed to save provider configuration."
+    echo "The server may not have write permissions or the config file may be locked."
+    echo ""
+    echo "Troubleshooting:"
+    echo "  1. Check opencode.json exists: cat ~/.kctx/opencode/config/opencode.json"
+    echo "  2. Check server logs: kctx logs kc"
+    echo "  3. Ensure config directory is writable"
+    exit 1
+  fi
+
+  echo "Provider saved successfully!"
+  echo ""
   echo "$result" | head -50
 }
 
@@ -530,7 +886,7 @@ provider_edit() {
   echo ""
 
   # Get current config
-  local config=$(api_call "POST" "/config/opencode")
+  local config=$(api_call "POST" "/config/get" "{}")
 
   # Extract provider IDs
   local providers=$(echo "$config" | grep -o '"[a-zA-Z0-9-]*":{' | sed 's/":{//;s/"//g' | grep -v "provider\|agent" | head -10)
@@ -727,8 +1083,11 @@ case "${1:-start}" in
         ;;
     esac
     ;;
+  init)
+    init_config
+    ;;
   *)
-    echo "Usage: kctx [start|stop|restart|status|logs|down|update|self-update|package|provider]"
+    echo "Usage: kctx [start|stop|restart|status|logs|down|update|self-update|package|provider|init]"
     echo ""
     echo "Commands:"
     echo "  start        - Start the services (default)"
@@ -741,6 +1100,7 @@ case "${1:-start}" in
     echo "  down         - Stop and remove containers"
     echo "  update       - Update kctx and Docker images, then restart services"
     echo "  self-update  - Update kctx script only"
+    echo "  init         - Initialize configuration files"
     echo "  package      - Manage packages"
     echo "    add        - Add a new package"
     echo "    edit       - Edit an existing package"

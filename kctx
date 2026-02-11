@@ -2,7 +2,7 @@
 
 set -e
 
-API_BASE="http://localhost:7167"
+API_BASE="http://localhost:7167/rpc"
 COMPOSE_FILE="$HOME/.kctx/compose.yaml"
 KCTX_SCRIPT="$HOME/.kctx/bin/kctx"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/christopher-kapic/kinetic-context/master"

@@ -161,7 +161,7 @@ EOF
 )
 
   echo "Creating package..."
-  local result=$(api_call "POST" "/packages.create" "$data")
+  local result=$(api_call "POST" "/packages/create" "{\"json\":$data}")
   echo "$result" | head -50
 }
 
@@ -175,7 +175,7 @@ package_edit() {
   echo ""
 
   # Fetch all packages
-  local packages=$(api_call "GET" "/packages.list")
+  local packages=$(api_call "POST" "/packages/list?data=%7B%22json%22%3A%7B%7D%7D")
   if [ -z "$packages" ] || [ "$packages" = "[]" ]; then
     echo "No packages found"
     exit 0
@@ -209,7 +209,7 @@ package_edit() {
   echo ""
 
   # Fetch package details
-  local pkg_json=$(api_call "GET" "/packages.get?data={\"identifier\":\"$selected_id\"}")
+  local pkg_json=$(api_call "POST" "/packages/get?data=%7B%22json%22%3A%7B%22identifier%22%3A%22$selected_id%22%7D%7D")
 
   # Extract current values
   local current_identifier=$(echo "$pkg_json" | grep -o '"identifier":"[^"]*"' | head -1 | sed 's/"identifier":"//;s/"//g')
@@ -301,7 +301,7 @@ package_edit() {
   fi
 
   echo "Updating package..."
-  local result=$(api_call "PATCH" "/packages.update" "$updates")
+  local result=$(api_call "PATCH" "/packages/update" "{\"json\":$updates}")
   echo "$result" | head -50
 }
 
@@ -319,7 +319,7 @@ package_pull() {
     echo ""
 
     # Fetch all packages
-  local packages=$(api_call "GET" "/packages.list")
+  local packages=$(api_call "POST" "/packages/list?data=%7B%22json%22%3A%7B%7D%7D")
     if [ -z "$packages" ] || [ "$packages" = "[]" ]; then
       echo "No packages found"
       exit 0
@@ -362,7 +362,7 @@ package_pull() {
   echo ""
 
   # Fetch package details to get repo path
-  local pkg_json=$(api_call "GET" "/packages.get?data={\"identifier\":\"$target_identifier\"}")
+  local pkg_json=$(api_call "POST" "/packages/get?data=%7B%22json%22%3A%7B%22identifier%22%3A%22$target_identifier%22%7D%7D")
   local storage_type=$(echo "$pkg_json" | grep -o '"storage_type":"[^"]*"' | head -1 | sed 's/"storage_type":"//;s/"//g')
   local repo_path=$(echo "$pkg_json" | grep -o '"repo_path":"[^"]*"' | head -1 | sed 's/"repo_path":"//;s/"//g')
 
@@ -402,14 +402,14 @@ package_pull_all() {
   echo ""
 
   # Fetch all packages
-  local packages=$(api_call "GET" "/packages.list")
+  local packages=$(api_call "POST" "/packages/list?data=%7B%22json%22%3A%7B%7D%7D")
   if [ -z "$packages" ] || [ "$packages" = "[]" ]; then
     echo "No packages found"
     exit 0
   fi
 
   echo "Fetching update results from server..."
-  local results=$(api_call "POST" "/packages/updateAll" "{}")
+  local results=$(api_call "POST" "/packages/updateAll" "{\"json\":{}}")
   echo "$results"
 }
 
@@ -499,7 +499,7 @@ provider_add() {
   fi
 
   # Get current config and add provider
-  local current_config=$(api_call "GET" "/config/opencode")
+  local current_config=$(api_call "POST" "/config/opencode")
 
   # Build provider JSON
   local provider_json=$(cat <<EOF
@@ -530,7 +530,7 @@ provider_edit() {
   echo ""
 
   # Get current config
-  local config=$(api_call "GET" "/config/opencode")
+  local config=$(api_call "POST" "/config/opencode")
 
   # Extract provider IDs
   local providers=$(echo "$config" | grep -o '"[a-zA-Z0-9-]*":{' | sed 's/":{//;s/"//g' | grep -v "provider\|agent" | head -10)

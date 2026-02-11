@@ -39,12 +39,12 @@ detect_container_runtime() {
 # Check if ghcr.io image is available (not denied/unauthorized)
 check_ghcr_available() {
   local cmd="$1"
-  echo "Checking ghcr.io access..."
+  echo "Checking ghcr.io access..." >&2
   if $cmd pull ghcr.io/anomalyco/opencode:latest 2>&1 | grep -qiE "denied|unauthorized|not found|authentication"; then
-    echo "ghcr.io access not available (authentication required or image not found)"
+    echo "ghcr.io access not available (authentication required or image not found)" >&2
     return 1
   fi
-  echo "ghcr.io access available"
+  echo "ghcr.io access available" >&2
   return 0
 }
 
@@ -52,10 +52,10 @@ check_ghcr_available() {
 check_local_opencode_image() {
   local cmd="$1"
   if $cmd image inspect opencode:local >/dev/null 2>&1; then
-    echo "Local OpenCode image found"
+    echo "Local OpenCode image found" >&2
     return 0
   fi
-  echo "Local OpenCode image not found"
+  echo "Local OpenCode image not found" >&2
   return 1
 }
 

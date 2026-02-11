@@ -769,8 +769,8 @@ provider_add() {
     exit 0
   fi
 
-  # Build provider JSON directly
-  local provider_json="{\"$provider_id\":{\"npm\":\"$provider_npm\",\"name\":\"$provider_name\",\"options\":{\"baseURL\":\"$base_url\",\"apiKey\":\"$api_key\"},\"models\":$models_final}}"
+  # Build provider value JSON (without the ID wrapper - that's added when merging)
+  local provider_value="{\"npm\":\"$provider_npm\",\"name\":\"$provider_name\",\"options\":{\"baseURL\":\"$base_url\",\"apiKey\":\"$api_key\"},\"models\":$models_final}"
 
   # Get current config
   local current_config=$(api_call "POST" "/config/get" "{}")
@@ -787,51 +787,51 @@ provider_add() {
   # Use jq if available, otherwise use Python
   if command -v jq >/dev/null 2>&1; then
     if [ "$is_valid_config" = "true" ]; then
-      # Merge provider into existing config
-      new_config=$(echo "$current_config" | jq ".provider.\"$provider_id\" = $provider_json")
+      # Extract inner config from {"json": {...}} wrapper and merge provider
+      new_config=$(echo "$current_config" | jq --argjson provider "$provider_value" --arg id "$provider_id" '.json | .provider |= if . == null then {} else . end | .provider[$id] = $provider')
     else
-      # Create new config with provider
-      new_config=$(echo "{}" | jq "{provider: {$provider_id: $provider_json}}")
+      # Create new config
+      new_config=$(jq -n --argjson provider "$provider_value" --arg id "$provider_id" '{provider: {($id): $provider}}')
     fi
 
     # Set default model if selected
     if [ -n "$default_model" ]; then
       local model_value="$provider_id/$default_model"
-      new_config=$(echo "$new_config" | jq ".model = \"$model_value\"")
+      new_config=$(echo "$new_config" | jq --arg model "$model_value" '.model = $model')
     fi
   else
     # Fallback to Python
     if [ "$is_valid_config" = "true" ]; then
-      new_config=$(python3 << PYTHON_EOF
+      # Read current config, extract json wrapper, merge provider
+      new_config=$(echo "$current_config" | python3 -c "
 import json, sys
 config = json.load(sys.stdin)
-provider = json.loads('''$provider_json''')
-if 'provider' not in config:
-    config['provider'] = {}
-config['provider']['$provider_id'] = provider
-print(json.dumps(config))
-PYTHON_EOF
-)
+provider = json.loads('''$provider_value''')
+config_inner = config.get('json', {})
+if 'provider' not in config_inner:
+    config_inner['provider'] = {}
+config_inner['provider']['$provider_id'] = provider
+print(json.dumps(config_inner))
+")
     else
-      new_config=$(python3 << PYTHON_EOF
-import json, sys
-provider = json.loads('''$provider_json''')
+      # Create new config
+      new_config=$(python3 -c "
+import json
+provider = json.loads('''$provider_value''')
 config = {'provider': {'$provider_id': provider}}
 print(json.dumps(config))
-PYTHON_EOF
-)
+")
     fi
 
     # Set default model if selected
     if [ -n "$default_model" ]; then
       local model_value="$provider_id/$default_model"
-      new_config=$(python3 << PYTHON_EOF
+      new_config=$(echo "$new_config" | python3 -c "
 import json, sys
-config = json.loads('''$new_config''')
+config = json.load(sys.stdin)
 config['model'] = '$model_value'
 print(json.dumps(config))
-PYTHON_EOF
-)
+")
     fi
   fi
 
@@ -840,8 +840,11 @@ PYTHON_EOF
   echo "Saving provider..."
   echo "DEBUG: Calling /config/update endpoint..."
 
-  local payload="{\"json\":{\"config\":$new_config}}"
+  # Wrap config in the oRPC expected format: {"json": {"config": {...}}}
+  local payload
+  payload=$(jq -n --argjson config "$new_config" '{json: {config: $config}}')
   echo "DEBUG: Payload size: ${#payload} bytes"
+  echo "DEBUG: Payload preview: $(echo "$payload" | jq -c '.' | cut -c1-200)..."
 
   local result=$(api_call "POST" "/config/update" "$payload")
 

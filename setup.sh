@@ -265,9 +265,10 @@ services:
       - PROJECTS_DIR=/projects
       - OPENCODE_CONFIG_PATH=/config/opencode.json
       - OPENCODE_STATE_DIR=/state
-      - OPENCODE_URL=http://opencode:4096
+      - OPENCODE_URL=http://kctx_opencode_1:4096
     depends_on:
-      - opencode
+      opencode:
+        condition: service_started
     restart: unless-stopped
 EOF
 

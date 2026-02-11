@@ -193,11 +193,13 @@ Example directory structure:
   /opencode/
 ```
 
-**Important:** Before running, you must authenticate to GitHub Container Registry to pull the opencode image:
+**Important:** Before running, you may authenticate to GitHub Container Registry to pull the opencode image:
 
 ```bash
 docker login ghcr.io
 ```
+
+If you don't authenticate, the system will build OpenCode from source during startup (requires bun).
 
 You'll need a GitHub Personal Access Token with `read:packages` permission. See the [Getting Started guide](/docs/getting-started) for details.
 

@@ -1,0 +1,308 @@
+---
+title: CLI Reference
+description: Complete reference for the kctx command-line interface
+---
+
+# CLI Reference
+
+The `kctx` command-line tool provides a complete interface for managing kinetic-context services, packages, and providers.
+
+## Usage
+
+```bash
+kctx [command] [options]
+```
+
+## Global Commands
+
+### start
+
+Start all kinetic-context services (default command).
+
+```bash
+kctx start
+```
+
+Starts both the kinetic-context web UI and OpenCode containers.
+
+**Output:**
+```
+Starting kinetic-context...
+kinetic-context is running!
+  Web UI: http://localhost:7167
+  OpenCode: http://localhost:7168
+```
+
+### stop
+
+Stop all running services.
+
+```bash
+kctx stop
+```
+
+### restart
+
+Restart all services.
+
+```bash
+kctx restart
+```
+
+### status
+
+Show the status of all containers.
+
+```bash
+kctx status
+```
+
+### logs
+
+Show logs from containers. Use service aliases for specific containers.
+
+```bash
+# Show logs from both containers
+kctx logs
+
+# Show logs from kinetic-context container only
+kctx logs kc
+
+# Show logs from OpenCode container only
+kctx logs oc
+```
+
+### down
+
+Stop and remove all containers.
+
+```bash
+kctx down
+```
+
+### update
+
+Pull latest images and restart services.
+
+```bash
+kctx update
+```
+
+This command:
+1. Pulls the latest kinetic-context image
+2. Checks if a local OpenCode image exists (built from source)
+3. If no local image, attempts to pull the pre-built OpenCode image from ghcr.io
+4. Restarts all services with new images
+
+## Package Management
+
+### kctx package add
+
+Add a new package to kinetic-context. This command starts an interactive wizard.
+
+```bash
+kctx package add
+```
+
+**Interactive fields:**
+- **Package Type**: Choose between "Cloned" (clone from git) or "Local" (use existing repository)
+- **Package Identifier**: e.g., `@hookform/resolvers`, `zod`
+- **Package Manager**: `npm`, `pnpm`, or `yarn` (default: `npm`)
+- **Display Name**: Human-readable name (defaults to identifier)
+- **Git URL**: For cloned packages (HTTPS or SSH)
+- **Default Tag/Branch**: e.g., `master`, `main`, `v1.0.0`, or `auto` to detect
+- **Optional URLs**: Website, Documentation, Git Browser, Logo
+
+**Example flow:**
+```
+Add New Package
+===============
+
+Package Types:
+  1. Cloned - Clone from git repository
+  2. Local - Use existing local repository
+
+Select type [1]: 1
+
+Package Identifier (e.g., @hookform/resolvers): zod
+Package Manager (npm/pnpm/yarn) [npm]: npm
+Display Name [zod]: zod
+Git URL: https://github.com/colinhacks/zod.git
+Default Tag/Branch (e.g., master, main, or 'auto' to detect) [auto]: v3.22.0
+
+Optional URLs (press Enter to skip):
+  Website URL: https://zod.dev
+  Documentation URL: https://zod.dev/documentation
+  Git Browser URL: https://github.com/colinhacks/zod
+  Logo URL:
+
+Summary:
+  Identifier: zod
+  Display Name: zod
+  Package Manager: npm
+  Storage Type: cloned
+  Git URL: https://github.com/colinhacks/zod.git
+  Default Tag: v3.22.0
+  Website: https://zod.dev
+  Docs: https://zod.dev/documentation
+  Git Browser: https://github.com/colinhacks/zod
+
+Create this package? (Y/n): y
+```
+
+### kctx package edit
+
+Edit an existing package configuration.
+
+```bash
+kctx package edit
+```
+
+Starts an interactive wizard to select and modify an existing package.
+
+**Example flow:**
+```
+Edit Package
+============
+
+Select a package to edit:
+
+  1. zod (Zod)
+  2. @hookform/resolvers (React Hook Form - Resolvers)
+
+Enter number: 1
+Selected: zod
+
+Edit Package Details (press Enter to keep current value)
+
+Identifier [zod]:
+Display Name [zod]:
+Package Manager [npm]:
+...
+```
+
+### kctx package pull
+
+Pull the latest changes for a specific package or select from a list.
+
+```bash
+# Pull a specific package
+kctx package pull zod
+
+# Interactive selection
+kctx package pull
+```
+
+**For cloned packages only** - updates the local git repository to the latest changes from the remote.
+
+### kctx package pull-all
+
+Pull latest changes for all cloned packages.
+
+```bash
+kctx package pull-all
+```
+
+This command queries the API to update all packages simultaneously and returns a summary of results.
+
+## Provider Management
+
+### kctx provider add
+
+Add a new AI provider configuration. This command starts an interactive wizard.
+
+```bash
+kctx provider add
+```
+
+**Interactive fields:**
+- **Provider Type**: OpenRouter, OpenCode Zen, or Custom (OpenAI-compatible)
+- **API Key**: (hidden input)
+- **Base URL**: Provider endpoint (auto-filled for standard providers)
+- **Default Model**: Default model ID
+- **Models**: List of available models (one per line)
+
+**Example flow:**
+```
+Add Provider
+============
+
+Provider Types:
+  1. OpenRouter
+  2. OpenCode Zen
+  3. Custom (OpenAI-compatible)
+
+Select provider type: 1
+
+API Key: ********
+Base URL [https://openrouter.ai/api/v1]:
+Default Model [anthropic/claude-3.5-sonnet]:
+
+Models (one per line, empty line to finish):
+openrouter/anthropic/claude-3.5-sonnet
+openrouter/anthropic/claude-3-opus
+
+Summary:
+  Provider ID: openrouter
+  NPM Package: @openrouter/ai-sdk-provider
+  Base URL: https://openrouter.ai/api/v1
+  Default Model: anthropic/claude-3.5-sonnet
+  Models: 2 configured
+```
+
+### kctx provider edit
+
+Edit an existing provider configuration.
+
+```bash
+kctx provider edit
+```
+
+Starts an interactive wizard to select and modify an existing provider.
+
+**Note:** Complex changes (like modifying the models list) should be done via the web UI.
+
+## Quick Reference
+
+| Command | Description |
+|---------|-------------|
+| `kctx` | Start services (default) |
+| `kctx start` | Start services |
+| `kctx stop` | Stop services |
+| `kctx restart` | Restart services |
+| `kctx status` | Show container status |
+| `kctx logs` | Show logs |
+| `kctx logs kc` | Show kinetic-context logs |
+| `kctx logs oc` | Show OpenCode logs |
+| `kctx down` | Stop and remove containers |
+| `kctx update` | Update images and restart |
+| `kctx package add` | Add a new package |
+| `kctx package edit` | Edit a package |
+| `kctx package pull <name>` | Pull updates for a package |
+| `kctx package pull-all` | Pull updates for all packages |
+| `kctx provider add` | Add a provider |
+| `kctx provider edit` | Edit a provider |
+
+## Environment Variables
+
+The CLI automatically uses these paths:
+
+- `COMPOSE_FILE`: `$HOME/.kctx/compose.yaml`
+- `API_BASE`: `http://localhost:7167`
+
+## Troubleshooting
+
+### "kinetic-context API is not running"
+
+Make sure services are running:
+```bash
+kctx start
+```
+
+### "Neither docker nor podman is installed"
+
+Install Docker or Podman before using kinetic-context.
+
+### Package pull fails for local packages
+
+Only cloned packages can be pulled. Local packages reference existing repositories that should be updated manually.

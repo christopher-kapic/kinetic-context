@@ -10,8 +10,7 @@ This guide will help you get kinetic-context up and running in just a few minute
 ## Prerequisites
 
 - Docker and Docker Compose installed
-- A GitHub account (for authenticating to ghcr.io)
-- A GitHub Personal Access Token with `read:packages` permission
+- Optional: A GitHub account for authenticating to ghcr.io (required only if you want to pull the OpenCode image from the registry; otherwise, OpenCode will be built locally from source)
 
 ## Installation
 
@@ -106,9 +105,11 @@ Make it executable:
 chmod +x ~/.kctx/bin/kctx
 ```
 
-### Step 5: Authenticate to GitHub Container Registry
+### Step 5: Authenticate to GitHub Container Registry (Optional)
 
-Before starting kinetic-context, you need to authenticate to GitHub Container Registry to pull the opencode image:
+Authenticating to GitHub Container Registry is optional. If you authenticate, the pre-built OpenCode image will be pulled from ghcr.io. If not, OpenCode will be built locally from source during the first startup (this requires [bun](https://bun.sh) to be installed).
+
+**To authenticate (optional):**
 
 ```bash
 docker login ghcr.io
@@ -118,13 +119,15 @@ When prompted:
 - **Username**: Your GitHub username
 - **Password**: A GitHub Personal Access Token (PAT) with `read:packages` permission
 
-To create a PAT:
+**To create a PAT:**
 1. Go to [GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)
 2. Click "Generate new token (classic)"
 3. Give it a name (e.g., "kinetic-context")
 4. Select the `read:packages` scope
 5. Click "Generate token"
 6. Copy the token and use it as the password when running `docker login ghcr.io`
+
+> **Note:** If you don't authenticate, the setup script will detect this and build OpenCode locally from source instead. This requires bun to be installed. On subsequent runs, the locally-built image will be reused.
 
 ### Step 6: Add kctx to Your PATH
 
@@ -195,7 +198,9 @@ After running the script, follow steps 5-8 above (authenticate, add to PATH, sta
 
 ### Can't pull opencode image
 
-Make sure you've authenticated to ghcr.io:
+If you can't authenticate to ghcr.io, kinetic-context will automatically build OpenCode from source instead. This requires bun to be installed.
+
+If you want to use the pre-built image, make sure you've authenticated:
 ```bash
 docker login ghcr.io
 ```

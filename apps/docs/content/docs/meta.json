@@ -3,6 +3,7 @@
     "index",
     "getting-started",
     "installation",
+    "cli",
     "configuration",
     "mcp-server",
     "api-reference",

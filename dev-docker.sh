@@ -20,7 +20,7 @@ $CONTAINER_CMD ps -a --filter 'name=kinetic-context' -q | xargs -I {} $CONTAINER
 
 # Build the image
 echo "Building kinetic-context image..."
-$CONTAINER_CMD build -t christopherkapic/kinetic-context:latest .
+$CONTAINER_CMD build -t docker.io/christopherkapic/kinetic-context:latest .
 
 # Start the services
 echo "Starting services..."

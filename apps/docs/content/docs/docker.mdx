@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
 
   kinetic-context:
-    image: christopherkapic/kinetic-context:latest
+    image: docker.io/christopherkapic/kinetic-context:latest
     ports:
       - "7167:3000"
     volumes:
@@ -193,7 +193,7 @@ docker run -d \
   -e OPENCODE_CONFIG_PATH=/config/opencode.json \
   -e OPENCODE_URL=http://localhost:7168 \
   --link opencode:opencode \
-  christopherkapic/kinetic-context:latest
+   docker.io/christopherkapic/kinetic-context:latest
 ```
 
 ## Building from Source
@@ -206,7 +206,7 @@ git clone https://github.com/christopher-kapic/kinetic-context.git
 cd kinetic-context
 
 # Build the image
-docker build -t christopherkapic/kinetic-context:latest .
+docker build -t docker.io/christopherkapic/kinetic-context:latest .
 
 # Or use docker compose
 docker compose build
@@ -216,8 +216,8 @@ docker compose build
 
 Available image tags on DockerHub:
 
-- `christopherkapic/kinetic-context:latest` - Latest stable release
-- `christopherkapic/kinetic-context:0.1.0` - Specific version tag
+- `docker.io/christopherkapic/kinetic-context:latest` - Latest stable release
+- `docker.io/christopherkapic/kinetic-context:0.1.0` - Specific version tag
 
 ## Updating Images
 
@@ -287,7 +287,7 @@ Example with resource limits:
 ```yaml
 services:
   kinetic-context:
-    image: christopherkapic/kinetic-context:0.1.0
+    image: docker.io/christopherkapic/kinetic-context:0.1.0
     deploy:
       resources:
         limits:

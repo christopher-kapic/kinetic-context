@@ -42,7 +42,7 @@ services:
     restart: unless-stopped
 
   kinetic-context:
-    image: christopherkapic/kinetic-context:latest
+    image: docker.io/christopherkapic/kinetic-context:latest
     ports:
       - "7167:3000"
     volumes:
@@ -737,7 +737,7 @@ case "${1:-start}" in
   update)
     echo "Updating kinetic-context..."
     echo "Pulling latest images..."
-    $CONTAINER_CMD pull christopherkapic/kinetic-context:latest
+    $CONTAINER_CMD pull docker.io/christopherkapic/kinetic-context:latest
     if $CONTAINER_CMD image inspect opencode:local >/dev/null 2>&1; then
       echo "Using local OpenCode image (rebuild skipped)"
     else
@@ -894,8 +894,8 @@ After running the script, you need to:
 
 The kinetic-context Docker image is available on DockerHub:
 
-- `christopherkapic/kinetic-context:latest` - Latest stable release
-- `christopherkapic/kinetic-context:0.1.0` - Specific version (example)
+- `docker.io/christopherkapic/kinetic-context:latest` - Latest stable release
+- `docker.io/christopherkapic/kinetic-context:0.1.0` - Specific version (example)
 
 ## System Requirements
 

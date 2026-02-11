@@ -248,7 +248,7 @@ services:
     restart: unless-stopped
 
   kinetic-context:
-    image: christopherkapic/kinetic-context:latest
+    image: docker.io/christopherkapic/kinetic-context:latest
     ports:
       - "7167:3000"
     volumes:
@@ -916,7 +916,7 @@ case "${1:-start}" in
   update)
     echo "Updating kinetic-context..."
     echo "Pulling latest images..."
-    $CONTAINER_CMD pull christopherkapic/kinetic-context:latest
+    $CONTAINER_CMD pull docker.io/christopherkapic/kinetic-context:latest
     if $CONTAINER_CMD image inspect opencode:local >/dev/null 2>&1; then
       echo "Using local OpenCode image (rebuild skipped)"
     else

@@ -257,9 +257,9 @@ export async function* queryOpencodeStream(
       let agentPrompt: string | undefined;
 
       if (opencodeConfig.agent && typeof opencodeConfig.agent === "object") {
-        const defaultAgent = (opencodeConfig.agent as Record<string, unknown>).default;
-        if (defaultAgent && typeof defaultAgent === "object" && typeof (defaultAgent as { prompt?: string }).prompt === "string") {
-          agentPrompt = (defaultAgent as { prompt: string }).prompt;
+        const kineticContextAgent = (opencodeConfig.agent as Record<string, unknown>)["kinetic-context"];
+        if (kineticContextAgent && typeof kineticContextAgent === "object" && typeof (kineticContextAgent as { prompt?: string }).prompt === "string") {
+          agentPrompt = (kineticContextAgent as { prompt: string }).prompt;
         }
       } else if (opencodeConfig.agent && typeof opencodeConfig.agent === "string") {
         agentPrompt = opencodeConfig.agent;
@@ -283,6 +283,7 @@ export async function* queryOpencodeStream(
             client.session.prompt({
               path: { id: currentSessionId },
               body: {
+                agent: "kinetic-context",
                 noReply: true,
                 parts: [{ type: "text", text: promptWithDirectory }],
               },
@@ -311,8 +312,9 @@ export async function* queryOpencodeStream(
     )) as { stream: AsyncIterable<{ type: string; properties?: { info?: unknown; part?: unknown; error?: unknown } }> };
     const eventStream = events.stream;
 
-    const promptBody: { parts: Array<{ type: string; text: string }>; model?: OpencodeModel } = {
+    const promptBody: { parts: Array<{ type: string; text: string }>; model?: OpencodeModel; agent: string } = {
       parts: [{ type: "text", text: query }],
+      agent: "kinetic-context",
     };
     if (model) {
       promptBody.model = model;
@@ -641,9 +643,9 @@ async function queryOpencodeInternal(
       let agentPrompt: string | undefined;
 
       if (opencodeConfig.agent && typeof opencodeConfig.agent === "object") {
-        const defaultAgent = (opencodeConfig.agent as Record<string, unknown>).default;
-        if (defaultAgent && typeof defaultAgent === "object" && typeof (defaultAgent as { prompt?: string }).prompt === "string") {
-          agentPrompt = (defaultAgent as { prompt: string }).prompt;
+        const kineticContextAgent = (opencodeConfig.agent as Record<string, unknown>)["kinetic-context"];
+        if (kineticContextAgent && typeof kineticContextAgent === "object" && typeof (kineticContextAgent as { prompt?: string }).prompt === "string") {
+          agentPrompt = (kineticContextAgent as { prompt: string }).prompt;
         }
       } else if (opencodeConfig.agent && typeof opencodeConfig.agent === "string") {
         agentPrompt = opencodeConfig.agent;
@@ -666,7 +668,7 @@ async function queryOpencodeInternal(
           await withTimeout(
             client.session.prompt({
               path: { id: currentSessionId },
-              body: { noReply: true, parts: [{ type: "text", text: promptWithDirectory }] },
+              body: { agent: "kinetic-context", noReply: true, parts: [{ type: "text", text: promptWithDirectory }] },
             }),
             env.OPENCODE_FETCH_TIMEOUT_MS,
             `Agent prompt send timed out after ${env.OPENCODE_FETCH_TIMEOUT_MS}ms`,
@@ -694,7 +696,7 @@ async function queryOpencodeInternal(
       promptResult = (await withTimeout(
         client.session.prompt({
           path: { id: currentSessionId },
-          body: { parts: [{ type: "text", text: query }] },
+          body: { agent: "kinetic-context", parts: [{ type: "text", text: query }] },
         }),
         env.OPENCODE_FETCH_TIMEOUT_MS,
         `Prompt send timed out after ${env.OPENCODE_FETCH_TIMEOUT_MS}ms`,

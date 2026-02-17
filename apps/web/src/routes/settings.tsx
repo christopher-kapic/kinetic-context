@@ -56,8 +56,8 @@ function SettingsComponent() {
   if (opencodeConfig.data?.agent) {
     if (typeof opencodeConfig.data.agent === "string") {
       agentPrompt = opencodeConfig.data.agent;
-    } else if (typeof opencodeConfig.data.agent === "object" && opencodeConfig.data.agent.default?.prompt) {
-      agentPrompt = opencodeConfig.data.agent.default.prompt;
+    } else if (typeof opencodeConfig.data.agent === "object" && opencodeConfig.data.agent["kinetic-context"]?.prompt) {
+      agentPrompt = opencodeConfig.data.agent["kinetic-context"].prompt;
     }
   }
   // Fall back to global settings if no agent prompt found
@@ -82,15 +82,15 @@ function SettingsComponent() {
       const currentConfig = opencodeConfig.data || { $schema: "https://opencode.ai/config.json", provider: {} };
       const updatedConfig = { ...currentConfig };
       
-      // Handle agent prompt - save to agent.default.prompt structure
+      // Handle agent prompt - save to agent["kinetic-context"].prompt structure
       if (value.default_agent_prompt && typeof value.default_agent_prompt === 'string' && value.default_agent_prompt.trim().length > 0) {
         // Ensure agent object exists
         if (!updatedConfig.agent || typeof updatedConfig.agent !== "object") {
           updatedConfig.agent = {};
         }
-        // Ensure default agent exists
-        if (!updatedConfig.agent.default || typeof updatedConfig.agent.default !== "object") {
-          updatedConfig.agent.default = {
+        // Ensure kinetic-context agent exists
+        if (!updatedConfig.agent["kinetic-context"] || typeof updatedConfig.agent["kinetic-context"] !== "object") {
+          updatedConfig.agent["kinetic-context"] = {
             mode: "primary",
             tools: {
               write: false,
@@ -100,13 +100,11 @@ function SettingsComponent() {
           };
         }
         // Update the prompt
-        updatedConfig.agent.default.prompt = value.default_agent_prompt;
+        updatedConfig.agent["kinetic-context"].prompt = value.default_agent_prompt;
       } else {
         // Remove agent prompt if empty, but keep agent structure if it exists
-        if (updatedConfig.agent && typeof updatedConfig.agent === "object" && updatedConfig.agent.default) {
-          delete updatedConfig.agent.default.prompt;
-          // If default agent has no other properties except mode and tools, we could remove it,
-          // but we'll keep the structure to maintain consistency
+        if (updatedConfig.agent && typeof updatedConfig.agent === "object" && updatedConfig.agent["kinetic-context"]) {
+          delete updatedConfig.agent["kinetic-context"].prompt;
         }
       }
       
@@ -184,9 +182,9 @@ function SettingsComponent() {
                               // Remove agent prompt from opencode.json
                               const currentConfig = opencodeConfig.data || { $schema: "https://opencode.ai/config.json", provider: {} };
                               const updatedConfig = { ...currentConfig };
-                              // Remove prompt from agent.default if it exists
-                              if (updatedConfig.agent && typeof updatedConfig.agent === "object" && updatedConfig.agent.default) {
-                                delete updatedConfig.agent.default.prompt;
+                              // Remove prompt from agent["kinetic-context"] if it exists
+                              if (updatedConfig.agent && typeof updatedConfig.agent === "object" && updatedConfig.agent["kinetic-context"]) {
+                                delete updatedConfig.agent["kinetic-context"].prompt;
                               }
                               updateConfigMutation.mutate({ config: updatedConfig });
                             }}

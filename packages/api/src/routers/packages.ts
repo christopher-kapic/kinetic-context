@@ -398,33 +398,33 @@ export const packagesRouter = {
     const configPath = env.OPENCODE_CONFIG_PATH;
     const config = await readOpencodeConfig(configPath);
     
-    // Get default agent info from config
+    // Get kinetic-context agent info from config
     let agentInfo: {
       name?: string;
       description?: string;
       prompt?: string;
     } | null = null;
-    
+
     if (config?.agent) {
-      if (typeof config.agent === "object" && config.agent.default) {
-        const defaultAgent = config.agent.default;
+      if (typeof config.agent === "object" && config.agent["kinetic-context"]) {
+        const kineticContextAgent = config.agent["kinetic-context"];
         agentInfo = {
-          name: defaultAgent.description || "Default Agent",
-          description: defaultAgent.description,
-          prompt: defaultAgent.prompt,
+          name: kineticContextAgent.description || "Kinetic Context",
+          description: kineticContextAgent.description,
+          prompt: kineticContextAgent.prompt,
         };
       } else if (typeof config.agent === "string") {
         // Legacy format
         agentInfo = {
-          name: "Default Agent",
+          name: "Kinetic Context",
           description: undefined,
           prompt: config.agent,
         };
       }
     }
-    
+
     return agentInfo || {
-      name: "Default Agent",
+      name: "Kinetic Context",
       description: undefined,
       prompt: undefined,
     };

@@ -310,7 +310,7 @@ export async function readOpencodeConfig(
         $schema: "https://opencode.ai/config.json",
         provider: {},
         agent: {
-          default: {
+          "kinetic-context": {
             mode: "primary",
             prompt:
               "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
@@ -331,7 +331,7 @@ export async function readOpencodeConfig(
         $schema: "https://opencode.ai/config.json",
         provider: {},
         agent: {
-          default: {
+          "kinetic-context": {
             mode: "primary",
             prompt:
               "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
@@ -362,16 +362,16 @@ export async function readOpencodeConfig(
       parsed.provider = cleanedProvider;
     }
 
-    // Ensure default agent exists if agent config is missing or doesn't have default
+    // Ensure kinetic-context agent exists if agent config is missing or doesn't have it
     if (
       !parsed.agent ||
       typeof parsed.agent !== "object" ||
-      !parsed.agent.default
+      !parsed.agent["kinetic-context"]
     ) {
       if (!parsed.agent) {
         parsed.agent = {};
       }
-      parsed.agent.default = {
+      parsed.agent["kinetic-context"] = {
         mode: "primary",
         prompt:
           "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
@@ -391,7 +391,7 @@ export async function readOpencodeConfig(
         $schema: "https://opencode.ai/config.json",
         provider: {},
         agent: {
-          default: {
+          "kinetic-context": {
             mode: "primary",
             prompt:
               "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
@@ -458,16 +458,16 @@ export async function writeOpencodeConfig(
     validated.$schema = "https://opencode.ai/config.json";
   }
 
-  // Ensure default agent exists if agent config is missing or doesn't have default
+  // Ensure kinetic-context agent exists if agent config is missing or doesn't have it
   if (
     !validated.agent ||
     typeof validated.agent !== "object" ||
-    !validated.agent.default
+    !validated.agent["kinetic-context"]
   ) {
     if (!validated.agent) {
       validated.agent = {};
     }
-    validated.agent.default = {
+    validated.agent["kinetic-context"] = {
       mode: "primary",
       prompt:
         "You are an AI agent whose job is to answer questions about the codebase you are asked about. Your primary responsibility is to help developers understand how to use dependencies and codebases effectively. When answering questions:\n\n1. Provide clear, practical answers with code examples when relevant\n2. Reference specific files, functions, or patterns in the codebase when possible\n3. Explain not just what the code does, but how to use it effectively\n4. If the question is ambiguous, ask clarifying questions\n5. Focus on helping developers understand how to integrate and use the dependency in their projects",
